@@ -58,19 +58,19 @@ namespace bot7
         {
             if (user.IsBot)
             {
-                botsCannal = state2.VoiceChannel.Name;
+                botsCannal = state2.VoiceChannel?.Name;
                 return;
             }
-            if (state1.VoiceChannel.Name != state2.VoiceChannel.Name&& state2.VoiceChannel.Name == botsCannal)
+            if (state1.VoiceChannel is object ? state1.VoiceChannel.Name != state2.VoiceChannel.Name : true&& state2.VoiceChannel.Name == botsCannal)
             {
                 if (user.GlobalName == "MrLeon")
                 {
                     VoiceCommands.cancellationToken.Cancel();
                     await VoiceCommands.PlayOnce("C:/Users/kurek/Documents/lemon.mp3");
-                    await VoiceCommands.SendAsync(VoiceCommands.audioClient, "C:/Users/kurek/Documents/lemon.mp3", VoiceCommands.cancellationToken.Token);
+                    //await VoiceCommands.SendAsync(VoiceCommands.audioClient, "C:/Users/kurek/Documents/lemon.mp3", VoiceCommands.cancellationToken.Token);
                     return;
                 }
-                if (user.GlobalName == "! Vicky")
+                if (user.Username == "! Vicky")
                 {
                     await VoiceCommands.PlayOnce("C:/Users/kurek/Documents/viczki.mp3");
                     return;
@@ -90,7 +90,7 @@ namespace bot7
                     await VoiceCommands.PlayOnce("C:/Users/kurek/Documents/krzys.mp3");
                     return;
                 }
-                if (user.GlobalName == "Robul")
+                if (user.GlobalName == "!Dawid Bombuszczak") 
                 {
                     await VoiceCommands.PlayOnce("C:/Users/kurek/Documents/robul.mp3");
                     return;
