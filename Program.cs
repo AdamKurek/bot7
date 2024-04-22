@@ -59,14 +59,7 @@ namespace bot7
             Console.WriteLine();
             return Task.CompletedTask;
         }
-        
-         private static async Task MessageInChannel(string message)
-        {
-            ulong chan = 1229272739303526501;
-            var chanelawait = (await client.GetChannelAsync(chan)) as IMessageChannel;
-            await chanelawait.SendMessageAsync(message);
-            return;
-        }
+       
         private async static Task Client_UserVoiceStateUpdated(SocketUser user, SocketVoiceState state1, SocketVoiceState state2)
         {
             return;
@@ -111,7 +104,13 @@ namespace bot7
                 }
             }
         }
-
+        public static async Task MessageInChannel(string message)
+        {
+            ulong chan = 1229272739303526501;
+            var chanelawait = (await client.GetChannelAsync(chan)) as IMessageChannel;
+            await chanelawait.SendMessageAsync(message);
+            return;
+        }
         private static Task Client_Log(LogMessage arg)
         {
             Console.WriteLine("logged " + arg.Message);
@@ -122,8 +121,6 @@ namespace bot7
         {
             var message = arg as SocketUserMessage;
             if (message.Author.IsBot) return;
-
-            await message.Channel.SendMessageAsync(message.Channel.Id.ToString());
 
             if (message.Content == "!play")
                 await client.SetCustomStatusAsync("Jedzie audicą Leona");

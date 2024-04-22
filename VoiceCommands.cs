@@ -12,6 +12,9 @@ using System.Threading;
 using YoutubeExplode;
 using YoutubeExplode.Videos.Streams;
 using System.IO;
+using AngleSharp.Dom;
+using YoutubeExplode.Playlists;
+using AngleSharp.Common;
 
 
 namespace bot7
@@ -24,43 +27,71 @@ namespace bot7
         public static Thread thread;
         public static bool imStopping = false;
         private static YoutubeClient youtube = new YoutubeClient();
+        static SongsQueuee<string> queue = new("https://www.youtube.com/watch?v=woNw5Dyqhzo");
+        static SocketVoiceState? voiceState;
+
+        internal static async Task SongsThread()
+        {
+            try
+            {
+                if (audioClient == null)
+                {
+                    audioClient = voiceState.Value.VoiceChannel.ConnectAsync(true, false, false, false).Result;
+                }
+                cancellationToken = new();
+                while (true)
+                {
+                    var token = cancellationToken.Token;
+                    var currUrl = queue.Dequeue();
+                    await Program.MessageInChannel("playing " + currUrl);
+                    await SendAsyncYT(audioClient, currUrl, token);
+                    if (token.IsCancellationRequested)
+                    {
+                        return;
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("it " + e.Message);
+            }
+        }
+
+
 
         [Command("play")]
         public async Task PlayCommand(string url = "https://www.youtube.com/watch?v=woNw5Dyqhzo")
         {
             if (Context.User is SocketGuildUser guildUser)
             {
-                var voiceState = guildUser.VoiceState;
+                voiceState = guildUser.VoiceState;
                 if (voiceState?.VoiceChannel != null)
                 {
                     try {
-                         thread = new(async ()  => {
-                            try
+
+                        cancellationToken.Cancel();
+                        try
+                        {
+                            if (thread != null)
                             {
-                                 if (audioClient == null)
-                                 {
-                                     audioClient = voiceState.Value.VoiceChannel.ConnectAsync(true, false, false, false).Result;
-                                 }
-                                 cancellationToken.Cancel();
-                                 cancellationToken = new();
-                                 while (true)
-                                 {
-                                     var token = cancellationToken.Token;
-                                     await SendAsyncYT(audioClient, url, token);
-                                     if (token.IsCancellationRequested)
-                                     {
-                                         return;
-                                     }
-                                 }
+                                thread.Join();
                             }
-                            catch (Exception e)
-                            {
-                                Console.WriteLine("it " + e.Message);
-                            }
-                });
+                        }
+                        catch (Exception e)
+                        {
+                            Console.WriteLine("noone cares exception:" + e.Message);
+                        }
+                        var urls = TryAsPlaylist(url);
+                        if (urls.Count() > 0)
+                        {
+                            queue.AppendFront(urls);
+                        }
+                        else
+                        {
+                            queue.insert(0, url);
+                        }
+                        thread = new Thread(async () => { await SongsThread(); });
                         thread.Start();
-                        //await voiceState.Value.VoiceChannel.ConnectAsync(true, false, true, true);
-                        //await SendAsync(voiceState.Value.VoiceChannel, "C:/Users/kurek/Documents/melon.mp3");
                     }
                     catch (Exception e)
                     {
@@ -78,6 +109,73 @@ namespace bot7
             }
         }
 
+        [Command("q")]
+        public async Task QCommand(string url = "https://www.youtube.com/watch?v=woNw5Dyqhzo")
+        {
+            if (Context.User is SocketGuildUser guildUser)
+            {
+                voiceState = guildUser.VoiceState;
+                if (voiceState?.VoiceChannel != null)
+                {
+                    try
+                    {
+                        var urls = TryAsPlaylist(url);
+                        if (urls.Count() > 0)
+                        {
+                            queue.AppendEnd(urls);
+                        }
+                        else
+                        {
+                            queue.enqueue(url);
+                        }
+                        if (thread == null)
+                        {
+                            thread = new Thread(async () => { await SongsThread(); });
+                            thread.Start();
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        Console.WriteLine("t " + e.Message);
+                    }
+                }
+                else
+                {
+                    await ReplyAsync("VC.");
+                }
+            }
+            else
+            {
+                await ReplyAsync("This command can only be used in a server.");
+            }
+        }
+
+        [Command("list")]
+        public async Task ListCommand()
+        {
+            string mess = "queue:\n";
+            int count = 0;
+            foreach(var s in queue) {
+                mess += s + '\n';
+                count++;
+                if(count % 20 == 0)
+                {
+                    await Program.MessageInChannel(mess);
+                    mess = "";
+                }
+            }
+            await Program.MessageInChannel(mess);
+
+        }
+
+        [Command("skip")]
+        public async Task SkipCommand()
+        {
+            cancellationToken.Cancel();
+            thread.Join();
+            thread = new Thread(async () => { await SongsThread(); });
+            thread.Start();
+        }
         public static async Task PlayOnce(string pathto)
         {
             try
@@ -154,7 +252,6 @@ namespace bot7
                 _currentProcess.Dispose();
             }
             try {
-
                 var streamManifest = await youtube.Videos.Streams.GetManifestAsync(url);
                 var streamInfo = streamManifest.GetAudioOnlyStreams().TryGetWithHighestBitrate();
                 string file = $"audio.{streamInfo.Container}";
@@ -209,6 +306,23 @@ namespace bot7
             catch (Exception e)
             {
                 Console.WriteLine("flushbug:" + e.Message);
+            }
+        }
+
+        public static IEnumerable<string> TryAsPlaylist(string url)
+        {
+            IEnumerable<PlaylistVideo> vids = null;
+            try
+            {
+                vids = youtube.Playlists.GetVideosAsync(url).ToEnumerable();
+            }
+            catch (Exception e)
+            {
+                yield break;
+            }
+            foreach (var vid in vids)
+            {
+                yield return vid.Url;
             }
         }
 
