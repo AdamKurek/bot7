@@ -20,7 +20,7 @@ namespace bot7
     {
         public static CancellationTokenSource cancellationToken = new CancellationTokenSource();
         private static Process _currentProcess = null!;
-        public static IAudioClient audioClient;
+        public static IAudioClient? audioClient;
         public static Thread thread;
         public static bool imStopping = false;
         private static YoutubeClient youtube = new YoutubeClient();
@@ -37,14 +37,16 @@ namespace bot7
                          thread = new(async ()  => {
                             try
                             {
-                               audioClient = voiceState.Value.VoiceChannel.ConnectAsync(true, false, false, false).Result;
+                                 if (audioClient == null)
+                                 {
+                                     audioClient = voiceState.Value.VoiceChannel.ConnectAsync(true, false, false, false).Result;
+                                 }
+                                 cancellationToken.Cancel();
                                  cancellationToken = new();
-
                                  while (true)
                                  {
-                                     Console.WriteLine("proboje");
                                      var token = cancellationToken.Token;
-                                     await SendAsyncYT(audioClient, "https://www.youtube.com/watch?v=woNw5Dyqhzo", token);
+                                     await SendAsyncYT(audioClient, url, token);
                                      if (token.IsCancellationRequested)
                                      {
                                          return;
@@ -128,8 +130,6 @@ namespace bot7
             }
             private static Process CreateStream(string path)
             {
-                //Console.WriteLine($"trying to get the process");
-
                 if (_currentProcess != null)
                 {
                     _currentProcess.Dispose();
@@ -146,7 +146,7 @@ namespace bot7
 #pragma warning restore CS8603 // Possible null reference return.
         }
 
-        private async static Task<string> CreateStreamYT(string url)
+        private async static Task<string> CreateFileFromYt(string url)
         {
 
             if (_currentProcess != null)
@@ -156,24 +156,19 @@ namespace bot7
             try {
 
                 var streamManifest = await youtube.Videos.Streams.GetManifestAsync(url);
-
-                // Get the highest bitrate audio-only stream
                 var streamInfo = streamManifest.GetAudioOnlyStreams().TryGetWithHighestBitrate();
-
-                // Download the stream to a file
-                await youtube.Videos.Streams.DownloadAsync(streamInfo, $"audio.{streamInfo.Container}");
-                if (File.Exists($"audio.{streamInfo.Container}"))
+                string file = $"audio.{streamInfo.Container}";
+                if (streamInfo != null)
                 {
-                    Console.WriteLine($"File {$"audio.{streamInfo.Container}"} downloaded successfully.");
-                }
-                else
-                {
-                    Console.WriteLine($"File {$"audio.{streamInfo.Container}"} was not downloaded.");
-                }
-                return $"audio.{streamInfo.Container}";
-                //return await youtube.Videos.Streams.GetAsync(streamInfo);
+             //       if (!File.Exists($"audio.{streamInfo.Container}"))
+                    {
+                 //       Console.WriteLine($"audio.{streamInfo.Container}");
+                        await youtube.Videos.Streams.DownloadAsync(streamInfo, file);
+                    }
+               //     Console.WriteLine($"audio.{streamInfo.Container}");
 
-
+                }
+                return file;
             }
             catch (Exception e) {
                 Console.WriteLine(e.ToString());
@@ -203,7 +198,7 @@ namespace bot7
         {
             try
             {
-                using (_currentProcess = CreateStream(await CreateStreamYT(path)))
+                using (_currentProcess = CreateStream(await CreateFileFromYt(path)))
                 using (var output = _currentProcess.StandardOutput.BaseStream)
                 using (discordstream = client.CreatePCMStream(AudioApplication.Mixed))
                 {

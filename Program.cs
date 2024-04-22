@@ -9,7 +9,7 @@ namespace bot7
     internal class Program
     {
         static IAudioClient audioClient;
-        static DiscordSocketClient client;
+        static public DiscordSocketClient client;
         static string botsCannal = "";
         static async Task Main(string[] args)
         {
@@ -44,7 +44,13 @@ namespace bot7
             client.VoiceChannelStatusUpdated += Client_VoiceChannelStatusUpdated;
             //Thread.Sleep(10000000);
             await client.SetCustomStatusAsync("sziluje bombe");
-            await Task.Delay(TimeSpan.FromMinutes(10000));
+            for(;;)
+            {
+                var mess = Console.ReadLine();
+                if(mess != null) { 
+                    await MessageInChannel(mess);
+                }
+            }
             LibOpusLoader.Dispose();
         }
 
@@ -53,9 +59,17 @@ namespace bot7
             Console.WriteLine();
             return Task.CompletedTask;
         }
-
+        
+         private static async Task MessageInChannel(string message)
+        {
+            ulong chan = 1229272739303526501;
+            var chanelawait = (await client.GetChannelAsync(chan)) as IMessageChannel;
+            await chanelawait.SendMessageAsync(message);
+            return;
+        }
         private async static Task Client_UserVoiceStateUpdated(SocketUser user, SocketVoiceState state1, SocketVoiceState state2)
         {
+            return;
             if (user.IsBot)
             {
                 botsCannal = state2.VoiceChannel?.Name;
@@ -101,12 +115,16 @@ namespace bot7
         private static Task Client_Log(LogMessage arg)
         {
             Console.WriteLine("logged " + arg.Message);
-            return null!;
+            return Task.CompletedTask;
         }
 
         private static async Task Client_MessageReceived(SocketMessage arg)
         {
             var message = arg as SocketUserMessage;
+            if (message.Author.IsBot) return;
+
+            await message.Channel.SendMessageAsync(message.Channel.Id.ToString());
+
             if (message.Content == "!play")
                 await client.SetCustomStatusAsync("Jedzie audicą Leona");
 
