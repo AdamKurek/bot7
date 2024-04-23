@@ -43,7 +43,7 @@ namespace bot7
             client.UserVoiceStateUpdated += Client_UserVoiceStateUpdated;
             client.VoiceChannelStatusUpdated += Client_VoiceChannelStatusUpdated;
             //Thread.Sleep(10000000);
-            await client.SetCustomStatusAsync("sziluje bombe");
+            await client.SetCustomStatusAsync("Proszę beton");
             for(;;)
             {
                 var mess = Console.ReadLine();
@@ -70,6 +70,7 @@ namespace bot7
             }
             if (state1.VoiceChannel is object ? state1.VoiceChannel.Name != state2.VoiceChannel.Name : true&& state2.VoiceChannel.Name == botsCannal)
             {
+                /*
                 if (user.GlobalName == "MrLeon")
                 {
                     VoiceCommands.cancellationToken.Cancel();
@@ -101,7 +102,7 @@ namespace bot7
                 {
                     await VoiceCommands.PlayOnce("C:/Users/kurek/Documents/robul.mp3");
                     return;
-                }
+                }*/
             }
         }
         public static async Task MessageInChannel(string message)

@@ -11,12 +11,12 @@ namespace bot7
     internal class SongsQueuee<T>:IEnumerable<T>
     {
         List<T> queue;
-        T _default;
+        public T DefaultSong { get; set; }
         object o = new object();
         public SongsQueuee(T @default)
         {
             queue = new List<T>();
-            _default = @default;
+            DefaultSong = @default;
         }
 
         public void enqueue(T v)
@@ -26,7 +26,7 @@ namespace bot7
 
         public T Dequeue()
         {
-            var ret = queue.FirstOrDefault(_default);
+            var ret = queue.FirstOrDefault(DefaultSong);
             queue.Remove(ret);
             return ret;
         }
