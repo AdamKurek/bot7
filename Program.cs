@@ -30,9 +30,7 @@ namespace bot7
             CommandHandler _commandHandler = new CommandHandler(client, _commands);
             await _commandHandler.InstallCommandsAsync();
 
-
             var token = "MTIyODc1ODI5NTA2MjM4NDY0MA.GkFdOy.Ap_ELkH_8ZOCyMHrCLZ8vNSalDvqJjIuBvB22U";
-
 
             await client.LoginAsync(TokenType.Bot, token);
             client.Log += Client_Log;
@@ -42,6 +40,7 @@ namespace bot7
             client.MessageReceived += Client_MessageReceived;
             client.UserVoiceStateUpdated += Client_UserVoiceStateUpdated;
             client.VoiceChannelStatusUpdated += Client_VoiceChannelStatusUpdated;
+            client.InteractionCreated += Client_InteractionCreated;
             //Thread.Sleep(10000000);
             await client.SetCustomStatusAsync("Proszę beton");
             for(;;)
@@ -52,6 +51,16 @@ namespace bot7
                 }
             }
             LibOpusLoader.Dispose();
+        }
+
+        private static Task Client_InteractionCreated(SocketInteraction arg)
+        {
+            if(arg.Type == InteractionType.MessageComponent)
+            {
+
+                arg.RespondAsync("xd");
+            }
+            return Task.CompletedTask;
         }
 
         private static Task Client_VoiceChannelStatusUpdated(Cacheable<SocketVoiceChannel, ulong> arg1, string arg2, string arg3)
@@ -112,6 +121,28 @@ namespace bot7
             await chanelawait.SendMessageAsync(message);
             return;
         }
+
+        public static async Task MessageInChannel(string message, string id)
+        {
+            //degenerate = 866745065020063747
+            // botkanal  = 1229272739303526501
+            ulong chan = 1229272739303526501;
+            var chanelawait = (await client.GetChannelAsync(chan)) as IMessageChannel;
+            await chanelawait.SendMessageAsync(message);
+            var buttonBuilder = new ButtonBuilder()
+            .WithLabel("<3")
+            .WithStyle(ButtonStyle.Primary)
+            .WithCustomId("id");
+
+            // Create a component builder and add the button to it
+            var componentBuilder = new ComponentBuilder()
+                .WithButton(buttonBuilder);
+
+            // Send the message with the component (button)
+            chanelawait.SendMessageAsync("message", components: componentBuilder.Build());
+            return;
+        }
+
         private static Task Client_Log(LogMessage arg)
         {
             Console.WriteLine("logged " + arg.Message);
@@ -122,7 +153,6 @@ namespace bot7
         {
             var message = arg as SocketUserMessage;
             if (message.Author.IsBot) return;
-
             if (message.Content == "!play")
                 await client.SetCustomStatusAsync("Jedzie audicą Leona");
 
