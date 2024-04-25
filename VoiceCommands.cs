@@ -8,6 +8,9 @@ using YoutubeExplode.Videos.Streams;
 using AngleSharp.Dom;
 using YoutubeExplode.Playlists;
 using System.Runtime.CompilerServices;
+using System.Speech.Synthesis;
+using System;
+using System.Globalization;
 
 
 namespace bot7
@@ -221,7 +224,7 @@ namespace bot7
         }
 
         [Command("skip")]
-        [Alias("next", "s", "ale gówno")]
+        [Alias("next", "s", "ale gówno", "co to za gówno")]
         public async Task SkipCommand()
         {
             SkipSong();
@@ -303,26 +306,43 @@ namespace bot7
             }
         }
 
-            private static Task Client_Log(LogMessage arg)
+        public static async Task BotSpeak(string text)
+        {
+            await BudgetQuickplayCommand(await CreateFileText(text, 0));
+
+        }
+
+        private async static Task BudgetQuickplayCommand(string path)
+        {
+            _stop = false;
+            if (voiceState?.VoiceChannel != null)
             {
-                Console.WriteLine("logged " + arg.Message);
-                return null!;
+                queue.insert(0, path);
+                cutIn = true;
+                _cancellationTokenSource.Cancel();
             }
-            private static Process CreateStream(string path)
+        }
+
+        private static Task Client_Log(LogMessage arg)
+        {
+            Console.WriteLine("logged " + arg.Message);
+            return null!;
+        }
+        private static Process CreateStream(string path)
+        {
+            if (_currentProcess != null)
             {
-                if (_currentProcess != null)
-                {
-                    _currentProcess.Dispose();
-                }
+                _currentProcess.Dispose();
+            }
 
 #pragma warning disable CS8603 // Possible null reference return.
-                return Process.Start(new ProcessStartInfo
-                {
-                    FileName = "ffmpeg",
-                    Arguments = $"-hide_banner -loglevel panic -i \"{path}\" -ac 2 -f s16le -ar 48000 pipe:1",
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true, 
-                });
+            return Process.Start(new ProcessStartInfo
+            {
+                FileName = "ffmpeg",
+                Arguments = $"-hide_banner -loglevel panic -i \"{path}\" -ac 2 -f s16le -ar 48000 pipe:1",
+                UseShellExecute = false,
+                RedirectStandardOutput = true, 
+            });
 #pragma warning restore CS8603 // Possible null reference return.
         }
 
@@ -350,6 +370,35 @@ namespace bot7
                 return file;
             }
             catch (Exception e) {
+                Console.WriteLine(e.ToString());
+                return "";
+            }
+        }
+
+        private async static Task<string> CreateFileText(string Text, int iteration)
+        {
+            try
+            {
+
+                SpeechSynthesizer synthesizer = new SpeechSynthesizer();
+                string file = $"output{iteration}.wav";
+                synthesizer.SetOutputToWaveFile(file);
+                foreach (InstalledVoice voice in synthesizer.GetInstalledVoices())
+                {
+                    VoiceInfo voiceInfo = voice.VoiceInfo;
+                    if (voiceInfo.Culture.Equals(new CultureInfo("pl-PL")))
+                    {
+                        synthesizer.SelectVoice(voiceInfo.Name);
+                        break;
+                    }
+                }
+                synthesizer.Speak(Text);
+                synthesizer.SetOutputToDefaultAudioDevice();
+
+                return file;
+            }
+            catch (Exception e)
+            {
                 Console.WriteLine(e.ToString());
                 return "";
             }
@@ -383,7 +432,7 @@ namespace bot7
         {
             try
             {
-                using (var currentProcess = CreateStream(await CreateFileFromYt(path, depth)))
+                using (var currentProcess = CreateStream(IsFromYoutube(path) ? await CreateFileFromYt(path, depth) : path))
                 using (var output = currentProcess.StandardOutput.BaseStream)
                 {
                     if (discordstream == null)
@@ -400,7 +449,6 @@ namespace bot7
                                     cutIn = false;
                                     await SendAsyncYT(client, queue.Dequeue(), depth + 1);
                                 }
-                                //_cancellationTokenSource.Dispose();
                                 _cancellationTokenSource = new();
                                 if (_stop)
                                 {
@@ -412,10 +460,7 @@ namespace bot7
                                 {
                                     await output.CopyToAsync(discordstream, _cancellationTokenSource.Token);
                                 }
-                                catch (Exception e)
-                                {
-                                    Console.WriteLine("pierwszy:" + e.Message);
-                                }
+                                catch (Exception e){}
                                 finally
                                 {
                                     semaphore.Release();
@@ -434,6 +479,11 @@ namespace bot7
             {
                 Console.WriteLine("flushbug:" + e.Message);
             }
+        }
+
+        private static bool IsFromYoutube(string path)
+        {
+            return path.Substring(0, 5).ToLower() == "https";
         }
 
         public static IEnumerable<string> TryAsPlaylist(string url)

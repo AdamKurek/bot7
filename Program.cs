@@ -46,8 +46,9 @@ namespace bot7
             for(;;)
             {
                 var mess = Console.ReadLine();
-                if(mess != null) { 
-                    await MessageInChannel(mess);
+                if(mess != null) {
+                    //await MessageInChannel(mess);
+                    await VoiceCommands.BotSpeak(mess);
                 }
             }
             LibOpusLoader.Dispose();
