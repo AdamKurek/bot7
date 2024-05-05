@@ -1,0 +1,1 @@
+bot is hosted locally on discord https://discord.gg/yCpGpevd plays youtube songs and playlists, speaks using native windows text to speach, currently working on voice sampling to add voice commands and talking with some LLM later
