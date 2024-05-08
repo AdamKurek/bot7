@@ -32,13 +32,7 @@ namespace bot7
             CommandService _commands = new CommandService();
             CommandHandler _commandHandler = new CommandHandler(client, _commands);
             await _commandHandler.InstallCommandsAsync();
-<<<<<<< HEAD
             var token = "";
-=======
-
-            var token = "MTIyODc1ODI5NTA2MjM4NDY0MA.GkFdOy.Ap_ELkH_8ZOCyMHrCLZ8vNSalDvqJjIuBvB22U";// recruiters please
-
->>>>>>> 25cbafd (added volumes and started working on speach to text)
             await client.LoginAsync(TokenType.Bot, token);
             client.Log += Client_Log;
             await client.StartAsync();
@@ -86,10 +80,7 @@ namespace bot7
        
         private async static Task Client_UserVoiceStateUpdated(SocketUser user, SocketVoiceState state1, SocketVoiceState state2)
         {
-<<<<<<< HEAD
             
-=======
->>>>>>> 25cbafd (added volumes and started working on speach to text)
             if (user.IsBot)
             {
                 botsCannal = state2.VoiceChannel?.Name;
