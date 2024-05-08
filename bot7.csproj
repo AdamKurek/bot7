@@ -11,6 +11,11 @@
     <PackageReference Include="Discord.Addons.Music" Version="0.2.1" />
     <PackageReference Include="Discord.Net" Version="3.14.1" />
     <PackageReference Include="System.Speech" Version="8.0.0" />
+<<<<<<< HEAD
+    <PackageReference Include="Whisper.net" Version="1.5.0" />
+    <PackageReference Include="Whisper.net.Runtime" Version="1.5.0" />
+    <PackageReference Include="Whisper.net.Runtime.Cublas" Version="1.5.0" />
+>>>>>>> 25cbafd (added volumes and started working on speach to text)
     <PackageReference Include="YoutubeExplode" Version="6.3.13" />
   </ItemGroup>
 

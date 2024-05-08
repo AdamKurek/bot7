@@ -7,27 +7,39 @@ using YoutubeExplode;
 using YoutubeExplode.Videos.Streams;
 using AngleSharp.Dom;
 using YoutubeExplode.Playlists;
-using System.Runtime.CompilerServices;
 using System.Speech.Synthesis;
-using System;
 using System.Globalization;
-
+using System;
+using Whisper.net;
+using Whisper.net.Ggml;
 
 namespace bot7
 {
     public class VoiceCommands : ModuleBase<SocketCommandContext>
     {
+        public enum songType
+        {
+            ytSong,
+            Voice
+        }
+
         public static CancellationTokenSource _cancellationTokenSource = new CancellationTokenSource();
+        public static CancellationTokenSource _recordingCancellationTokenSource = new CancellationTokenSource();
+
         private static Process _currentProcess = null!;
         public static IAudioClient? audioClient;
         public static Thread? thread;
+        public static Thread? recordingThread;
         public static bool _stop = false;
         private static YoutubeClient youtube = new YoutubeClient();
-        static SongsQueuee<string> queue = new("https://www.youtube.com/watch?v=woNw5Dyqhzo");
+        static SongsQueuee<(string, songType)> queue = new(("https://www.youtube.com/watch?v=woNw5Dyqhzo", songType.ytSong));
         static SocketVoiceState? voiceState;
         static long pausedAt = 0;
         static Semaphore semaphore = new(1,1);
         static bool cutIn = false;
+
+        //Whisper.iAudioBuffer? buffer;
+
 
         internal async Task SongsThread()
         {
@@ -36,14 +48,14 @@ namespace bot7
                 if (audioClient == null)
                 {
                     //var discordstream = client.CreatePCMStream(AudioApplication.Mixed)
-                    audioClient =  await voiceState.Value.VoiceChannel.ConnectAsync(true, false, false, false);
+                    audioClient =  await voiceState.Value.VoiceChannel.ConnectAsync(false, false, false, false);
                 }
                 _cancellationTokenSource = new();
                 while (true)
                 {
                     var token = _cancellationTokenSource.Token;
                     var currUrl = queue.Dequeue();
-                    await Program.MessageInChannel("playing " + currUrl);
+                    await Program.MessageInChannel("playing " + currUrl.Item1);
                     await SendAsyncYT(audioClient, currUrl);
                     if (token.IsCancellationRequested)
                     {
@@ -54,6 +66,227 @@ namespace bot7
             catch (Exception e)
             {
                 Console.WriteLine("it " + e.Message);
+            }
+        }
+
+        internal async Task RecordingThread()
+        {
+            try
+            {
+                
+                //if (audioClient == null)
+                {
+                    //audioClient = await voiceState.Value.VoiceChannel.ConnectAsync(false, false, false, false);
+                }
+
+                //var audioClient = await channel.ConnectAsync();
+                //var audioStream = audioClient.CreatePCMStream(AudioApplication.Mixed);
+                //using (var fileStream = File.Create("voices.pcm"))
+                //{
+                //    await audioStream.CopyToAsync(fileStream);
+                //}
+
+                //var channel = channel ?? (Context.User as IGuildUser)?.VoiceChannel;
+                //if (channel == null)
+                {
+                   // await ReplyAsync("User must be in a voice channel, or a voice channel must be passed as an argument.");
+                   // return;
+                }
+
+                // Transmit silence to comply with Discord's requirements
+                //var audioClient = await channel.ConnectAsync();
+                //await TransmitSilenceAsync(audioClient);
+
+                // Listen to the audio stream
+                _recordingCancellationTokenSource = new();
+                await ListenToAudioStream(voiceState.Value.VoiceChannel);
+
+                //WhisperMain.WhisperRun(Array.Empty<string>());
+
+
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("it " + e.Message);
+            }
+        }
+
+        private async Task ListenToAudioStream(IVoiceChannel channel)
+        {
+            var users =  channel.GetUsersAsync();
+            await foreach (var userCollection in channel.GetUsersAsync())
+            {
+                foreach (var user in userCollection)
+                {
+                    if (!user.IsBot)
+                    {
+                        string nm = "kaczek";
+                        //if (user.DisplayName == nm)
+                        //{
+                        //    Console.WriteLine(user.DisplayName);
+                        //}
+                        //if (user.GlobalName == nm)
+                        //{
+                        //    Console.WriteLine(user.GlobalName);
+                        //}
+                       
+                        //{
+                        //    Console.WriteLine(user.Username);
+                        //}
+                        //if (user.Nickname == nm)
+                        //{
+                        //    Console.WriteLine(user.Nickname);
+                        //}
+                        if (user.Username == nm)
+                        if (user is SocketGuildUser guilduser)
+                        {
+                            if(guilduser.AudioStream != null)
+                            {
+                                var filePath = "outputAudioFile.webm";
+                                if (File.Exists(filePath))
+                                {
+                                    File.Delete(filePath);
+                                }
+                                string ffmpegPath = "ffmpeg"; 
+                                string arguments = "-f s16le -ar 48000 -ac 2 -i pipe:0 -c:a libvorbis outputAudioFile.webm";
+                                using (Process ffmpegProcess = new Process())
+                                {
+                                    ProcessStartInfo startInfo = new ProcessStartInfo
+                                    {
+                                        FileName = ffmpegPath,
+                                        Arguments = arguments,
+                                        UseShellExecute = false,
+                                        RedirectStandardInput = true,
+                                        RedirectStandardOutput = false,
+                                        RedirectStandardError = true,
+                                        CreateNoWindow = true,
+                                    };
+
+                                    ffmpegProcess.StartInfo = startInfo;
+
+        internal async Task RecordingThread()
+        {
+            try
+            {
+                
+                //if (audioClient == null)
+                {
+                    //audioClient = await voiceState.Value.VoiceChannel.ConnectAsync(false, false, false, false);
+                }
+
+                //var audioClient = await channel.ConnectAsync();
+                //var audioStream = audioClient.CreatePCMStream(AudioApplication.Mixed);
+                //using (var fileStream = File.Create("voices.pcm"))
+                //{
+                //    await audioStream.CopyToAsync(fileStream);
+                //}
+
+                //var channel = channel ?? (Context.User as IGuildUser)?.VoiceChannel;
+                //if (channel == null)
+                {
+                   // await ReplyAsync("User must be in a voice channel, or a voice channel must be passed as an argument.");
+                   // return;
+                }
+
+                // Transmit silence to comply with Discord's requirements
+                //var audioClient = await channel.ConnectAsync();
+                //await TransmitSilenceAsync(audioClient);
+
+                // Listen to the audio stream
+                _recordingCancellationTokenSource = new();
+                await ListenToAudioStream(voiceState.Value.VoiceChannel);
+
+                //WhisperMain.WhisperRun(Array.Empty<string>());
+
+
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("it " + e.Message);
+            }
+        }
+
+        private async Task ListenToAudioStream(IVoiceChannel channel)
+        {
+            var users =  channel.GetUsersAsync();
+            await foreach (var userCollection in channel.GetUsersAsync())
+            {
+                foreach (var user in userCollection)
+                {
+                    if (!user.IsBot)
+                    {
+                        string nm = "kaczek";
+                        //if (user.DisplayName == nm)
+                        //{
+                        //    Console.WriteLine(user.DisplayName);
+                        //}
+                        //if (user.GlobalName == nm)
+                        //{
+                        //    Console.WriteLine(user.GlobalName);
+                        //}
+                       
+                        //{
+                        //    Console.WriteLine(user.Username);
+                        //}
+                        //if (user.Nickname == nm)
+                        //{
+                        //    Console.WriteLine(user.Nickname);
+                        //}
+                        if (user.Username == nm)
+                        if (user is SocketGuildUser guilduser)
+                        {
+                            if(guilduser.AudioStream != null)
+                            {
+                                var filePath = "outputAudioFile.webm";
+                                if (File.Exists(filePath))
+                                {
+                                    File.Delete(filePath);
+                                }
+                                string ffmpegPath = "ffmpeg"; 
+                                string arguments = $"-f s16le -ar 48000 -ac 2 -i pipe:0 -c:a libvorbis {filePath}";
+                                using (Process ffmpegProcess = new Process())
+                                {
+                                    ProcessStartInfo startInfo = new ProcessStartInfo
+                                    {
+                                        FileName = ffmpegPath,
+                                        Arguments = arguments,
+                                        UseShellExecute = false,
+                                        RedirectStandardInput = true,
+                                        RedirectStandardOutput = true,
+                                        RedirectStandardError = true,
+                                        CreateNoWindow = true,
+                                    };
+
+                                    ffmpegProcess.StartInfo = startInfo;
+
+                                    ffmpegProcess.Start();
+                                    using (var audioStream = guilduser.AudioStream)
+                                    {
+                                        using (var stdin = ffmpegProcess.StandardInput.BaseStream)
+                                        {
+                                            EndOfStreamWrapper endOfStreamWrapper = new(audioStream);
+                                            try
+                                            {
+                                                await endOfStreamWrapper.CopyToAsync(stdin, _recordingCancellationTokenSource.Token);
+                                            }
+                                            catch (Exception e)
+                                            {
+                                                Console.WriteLine(e.Message);
+                                            }
+                                            finally
+                                            {
+                                                ffmpegProcess.WaitForExit(40);
+                                                await stdin.FlushAsync();
+                                            }
+                                        }
+                                    }
+
+                                    Console.WriteLine("zakonczylem sluchanie");
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -72,11 +305,11 @@ namespace bot7
                         if (urls.Count() > 0)
                         {
                             queue.AppendFront(urls);
-                            Console.WriteLine("otuz " + urls.Contains(url) + url.IndexOf(url));
+                            //Console.WriteLine("otuz " + urls.Contains(url) + url.IndexOf(url));
                         }
                         else
                         {
-                            queue.insert(0, url);
+                            queue.insert(0, (url,songType.ytSong));
                         }
                         if (thread == null)
                         {
@@ -123,7 +356,7 @@ namespace bot7
                         }
                         else
                         {
-                            queue.enqueue(url);
+                            queue.enqueue((url, songType.ytSong));
                         }
                         if (thread == null)
                         {
@@ -165,11 +398,11 @@ namespace bot7
                         if (urls.Count() > 0)
                         {
                             queue.AppendFront(urls);
-                            Console.WriteLine("otuz " + urls.Contains(url) + url.IndexOf(url));
+                            //Console.WriteLine("otuz " + urls.Contains(url) + url.IndexOf(url));
                         }
                         else
                         {
-                            queue.insert(0, url);
+                            queue.insert(0, (url, songType.ytSong));
                         }
                         if (thread == null)
                         {
@@ -202,7 +435,7 @@ namespace bot7
         [Alias("default", "domyślna piosenka", "kółkuj", "loop")]
         public async Task SetDefault(string url = "https://www.youtube.com/watch?v=woNw5Dyqhzo")
         {
-            queue.DefaultSong = url;
+            queue.DefaultSong = (url, songType.ytSong);
         }
 
         [Command("list")]
@@ -211,7 +444,7 @@ namespace bot7
             string mess = "queue:\n";
             int count = 0;
             foreach(var s in queue) {
-                mess += s + '\n';
+                mess += s.Item1 + '\n';
                 count++;
                 if(count % 20 == 0)
                 {
@@ -256,63 +489,113 @@ namespace bot7
             StopMusicThread();
         }
 
+        [Command("record")]
+        [Alias("rec")]
+        public async Task RecordCommand()
+        {
+            recordingThread = new Thread(async () => { await RecordingThread(); });
+            recordingThread.Start();
+        }
+        
+        [Command("reco")]
+        [Alias("rec stop")]
+        public async Task RecordStopCommand()
+        {
+            _recordingCancellationTokenSource.Cancel();
+        }
+
+        [Command("textuj")]
+        [Alias("text")]
+        public async Task TextCommand()
+        {
+            //string[] tokeny = { "-m", "Models/ggml-medium.bin" , "outputAudioFile.webm"};
+            //WhisperMain.WhisperRun(tokeny);
+
+            var modelName = "ggml-medium.bin"; // Specify the model name you want to download
+                                               //if (!File.Exists(modelName))
+                                               //{
+                                               //    using var modelStream = await WhisperGgmlDownloader.GetGgmlModelAsync(GgmlType.Base); // Adjust GgmlType.Base to the type of model you need
+                                               //    using var fileWriter = File.OpenWrite(modelName);
+                                               //    await modelStream.CopyToAsync(fileWriter);
+                                               //}
+
+            string inputFile = "outputAudioFile.webm"; // Path to the recorded WebM file
+            string outputFile = "outputFile.wav"; // Desired output .wav file
+            if (File.Exists(outputFile))
+            {
+                File.Delete(outputFile);
+            }
+            // FFmpeg command to convert the recorded audio file (WebM) to a .wav file with 16 kHz sample rate
+            string arguments = $"-i {inputFile} -ar 16000 {outputFile}";
+
+            using (Process ffmpegProcess = new Process())
+            {
+                ProcessStartInfo startInfo = new ProcessStartInfo
+                {
+                    FileName = "ffmpeg", // Assuming ffmpeg is in the system PATH
+                    Arguments = arguments,
+                    UseShellExecute = false,
+                    RedirectStandardInput = true,
+                    RedirectStandardOutput = false,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true,
+                };
+
+                ffmpegProcess.StartInfo = startInfo;
+                ffmpegProcess.Start();
+
+                // You may want to wait for the process to finish before continuing
+                ffmpegProcess.WaitForExit();
+            }
+
+
+
+
+
+
+
+            Console.WriteLine("sciongled");
+            try
+            {
+                using var whisperFactory = WhisperFactory.FromPath("Models/ggml-medium.bin");
+                using var processor = whisperFactory.CreateBuilder()
+                    .WithLanguage("pl")
+                    .Build();
+
+
+
+
+
+                using var fileStream = File.OpenRead("outputFile.wav");
+
+                await foreach (var result in processor.ProcessAsync(fileStream))
+                {
+                    Console.WriteLine($"{result.Start}->{result.End}: {result.Text}");
+                }
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("ebege = " + e);
+            }
+        }
+
         async void StopMusicThread()
         {
-            semaphore.Release();
+            try {
+                semaphore.Release();
+            } catch(Exception ex) { }
             _cancellationTokenSource.Cancel();
             _stop = true;
             thread.Join();
             thread = null;
         }
 
-        public async Task PlayOnce(string pathto)
-        {
-            _stop = false;
-            try
-            {
-                VoiceCommands._cancellationTokenSource.Cancel();
-                thread.Join();
-                _cancellationTokenSource = new();
-                thread = new(async () => {
-                    try
-                    {
-                        var tkn = _cancellationTokenSource.Token;
-                        await SendAsync(audioClient, pathto, tkn);
-                        if (tkn.IsCancellationRequested)
-                        {
-                            return;
-                        }
-                    while (true)
-                        {
-                            
-                            //await SendAsyncYT(audioClient, "https://www.youtube.com/watch?v=woNw5Dyqhzo", token);
-
-                            //if (token.IsCancellationRequested)
-                            {
-                                return;
-                            }
-                        }
-                    }
-                    catch (Exception e)
-                    {
-                        Console.WriteLine("it " + e.Message);
-                    }
-                });
-                thread.Start() ;
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine("wontkowy Error: " + e.Message);
-            }
-        }
-
         public static async Task BotSpeak(string text)
         {
-            await BudgetQuickplayCommand(await CreateFileText(text, 0));
-
+            await BudgetQuickplayCommand((await CreateFileText(text, 0), songType.Voice));
         }
 
-        private async static Task BudgetQuickplayCommand(string path)
+        public async static Task BudgetQuickplayCommand((string, songType) path)
         {
             _stop = false;
             if (voiceState?.VoiceChannel != null)
@@ -328,18 +611,23 @@ namespace bot7
             Console.WriteLine("logged " + arg.Message);
             return null!;
         }
-        private static Process CreateStream(string path)
+        private static Process CreateStream((string, songType) path)
         {
             if (_currentProcess != null)
             {
                 _currentProcess.Dispose();
+            }
+            float volume = 1f;
+            if (path.Item2 == songType.ytSong)
+            {
+                volume = 0.7f;
             }
 
 #pragma warning disable CS8603 // Possible null reference return.
             return Process.Start(new ProcessStartInfo
             {
                 FileName = "ffmpeg",
-                Arguments = $"-hide_banner -loglevel panic -i \"{path}\" -ac 2 -f s16le -ar 48000 pipe:1",
+                Arguments = $"-hide_banner -loglevel panic -i \"{path.Item1}\" -af \"volume={volume.ToString("0.0")}\" -ac 2 -f s16le -ar 48000 pipe:1",
                 UseShellExecute = false,
                 RedirectStandardOutput = true, 
             });
@@ -409,7 +697,7 @@ namespace bot7
         {
             try {
                 
-                using (_currentProcess = CreateStream(path))
+                using (_currentProcess = CreateStream((path, songType.ytSong)))
                 using (var output = _currentProcess.StandardOutput.BaseStream)
                 using (var discordstream = client.CreatePCMStream(AudioApplication.Mixed))
                 {
@@ -428,11 +716,11 @@ namespace bot7
             }
         }
 
-        public static async Task SendAsyncYT(IAudioClient client, string path, int depth = 0)
+        public static async Task SendAsyncYT(IAudioClient client, (string , songType) path, int depth = 0)
         {
             try
             {
-                using (var currentProcess = CreateStream(IsFromYoutube(path) ? await CreateFileFromYt(path, depth) : path))
+                using (var currentProcess = CreateStream(IsFromYoutube(path.Item1) ? (await CreateFileFromYt(path.Item1, depth),songType.ytSong) : path))
                 using (var output = currentProcess.StandardOutput.BaseStream)
                 {
                     if (discordstream == null)
@@ -486,7 +774,7 @@ namespace bot7
             return path.Substring(0, 5).ToLower() == "https";
         }
 
-        public static IEnumerable<string> TryAsPlaylist(string url)
+        public static IEnumerable<(string, songType)> TryAsPlaylist(string url)
         {
             IEnumerable<PlaylistVideo> vids = null;
             try
@@ -499,7 +787,7 @@ namespace bot7
             }
             foreach (var vid in vids)
             {
-                yield return vid.Url;
+                yield return (vid.Url, songType.ytSong);
             }
         }
 

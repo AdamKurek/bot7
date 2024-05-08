@@ -3,6 +3,7 @@ using Discord;
 using Discord.Audio;
 using Discord.Commands;
 using Discord.WebSocket;
+using System.Diagnostics;
 
 namespace bot7
 {
@@ -13,9 +14,11 @@ namespace bot7
         static string botsCannal = "";
         static async Task Main(string[] args)
         {
-            try { 
+            try
+            {
                 LibOpusLoader.Init();
-            }catch (Exception ex)
+            }
+            catch (Exception ex)
             {
                 Console.WriteLine(ex.Message);
             }
@@ -29,9 +32,13 @@ namespace bot7
             CommandService _commands = new CommandService();
             CommandHandler _commandHandler = new CommandHandler(client, _commands);
             await _commandHandler.InstallCommandsAsync();
+<<<<<<< HEAD
+            var token = "";
+=======
 
-            var token = "MTIyODc1ODI5NTA2MjM4NDY0MA.GkFdOy.Ap_ELkH_8ZOCyMHrCLZ8vNSalDvqJjIuBvB22U";
+            var token = "MTIyODc1ODI5NTA2MjM4NDY0MA.GkFdOy.Ap_ELkH_8ZOCyMHrCLZ8vNSalDvqJjIuBvB22U";// recruiters please
 
+>>>>>>> 25cbafd (added volumes and started working on speach to text)
             await client.LoginAsync(TokenType.Bot, token);
             client.Log += Client_Log;
             await client.StartAsync();
@@ -39,19 +46,26 @@ namespace bot7
             //client.Connected += client_Connected;
             client.MessageReceived += Client_MessageReceived;
             client.UserVoiceStateUpdated += Client_UserVoiceStateUpdated;
+            
             client.VoiceChannelStatusUpdated += Client_VoiceChannelStatusUpdated;
             client.InteractionCreated += Client_InteractionCreated;
             //Thread.Sleep(10000000);
             await client.SetCustomStatusAsync("Proszę beton");
-            for(;;)
+            try
             {
-                var mess = Console.ReadLine();
-                if(mess != null) {
-                    //await MessageInChannel(mess);
-                    await VoiceCommands.BotSpeak(mess);
+                for (; ; )
+                {
+                    var mess = Console.ReadLine();
+                    if (mess != null)
+                    {
+                        await VoiceCommands.BotSpeak(mess);
+                    }
                 }
             }
-            LibOpusLoader.Dispose();
+            finally
+            {
+                LibOpusLoader.Dispose();
+            }
         }
 
         private static Task Client_InteractionCreated(SocketInteraction arg)
@@ -72,48 +86,49 @@ namespace bot7
        
         private async static Task Client_UserVoiceStateUpdated(SocketUser user, SocketVoiceState state1, SocketVoiceState state2)
         {
-            return;
+<<<<<<< HEAD
+            
+=======
+>>>>>>> 25cbafd (added volumes and started working on speach to text)
             if (user.IsBot)
             {
                 botsCannal = state2.VoiceChannel?.Name;
                 return;
             }
-            if (state1.VoiceChannel is object ? state1.VoiceChannel.Name != state2.VoiceChannel.Name : true&& state2.VoiceChannel.Name == botsCannal)
+         /*   if (state1.VoiceChannel is object ? state1.VoiceChannel.Name != state2.VoiceChannel.Name : true&& state2.VoiceChannel.Name == botsCannal)
             {
-                /*
+                
                 if (user.GlobalName == "MrLeon")
                 {
-                    VoiceCommands.cancellationToken.Cancel();
-                    await VoiceCommands.PlayOnce("C:/Users/kurek/Documents/lemon.mp3");
-                    //await VoiceCommands.SendAsync(VoiceCommands.audioClient, "C:/Users/kurek/Documents/lemon.mp3", VoiceCommands.cancellationToken.Token);
+                    await VoiceCommands.BudgetQuickplayCommand("C:/Users/kurek/Documents/lemon.mp3");
                     return;
                 }
                 if (user.Username == "! Vicky")
                 {
-                    await VoiceCommands.PlayOnce("C:/Users/kurek/Documents/viczki.mp3");
+                    //await VoiceCommands.BudgetQuickplayCommand("C:/Users/kurek/Documents/viczki.mp3");
                     return;
                 }
                 if (user.GlobalName == "kaczek")
                 {
-                    await VoiceCommands.PlayOnce("C:/Users/kurek/Documents/kaczek.mp3");
+                    await VoiceCommands.BudgetQuickplayCommand("C:/Users/kurek/Documents/kaczek.mp3");
                     return;
                 }
                 if (user.GlobalName == "Siyuu")
                 {
-                    await VoiceCommands.PlayOnce("C:/Users/kurek/Documents/siju.mp3");
+                    await VoiceCommands.BudgetQuickplayCommand("C:/Users/kurek/Documents/siju.mp3");
                     return;
                 }
                 if (user.GlobalName == "Krisq")
                 {
-                    await VoiceCommands.PlayOnce("C:/Users/kurek/Documents/krzys.mp3");
+                    await VoiceCommands.BudgetQuickplayCommand("C:/Users/kurek/Documents/krzys.mp3");
                     return;
                 }
                 if (user.GlobalName == "!Dawid Bombuszczak") 
                 {
-                    await VoiceCommands.PlayOnce("C:/Users/kurek/Documents/robul.mp3");
+                    await VoiceCommands.BudgetQuickplayCommand("C:/Users/kurek/Documents/robul.mp3");
                     return;
-                }*/
-            }
+                }
+            }*/
         }
         public static async Task MessageInChannel(string message)
         {
@@ -125,6 +140,7 @@ namespace bot7
 
         public static async Task MessageInChannel(string message, string id)
         {
+            
             //degenerate = 866745065020063747
             // botkanal  = 1229272739303526501
             ulong chan = 1229272739303526501;
@@ -154,7 +170,11 @@ namespace bot7
         {
             var message = arg as SocketUserMessage;
             if (message.Author.IsBot) return;
-            if (message.Content == "!play")
+            if (message.Content == "!wyłącz mi komputer xd")
+            {
+                //Process.Start("shutdown", "/s /t 5");
+            }
+                if (message.Content == "!play")
                 await client.SetCustomStatusAsync("Jedzie audicą Leona");
 
             return;
