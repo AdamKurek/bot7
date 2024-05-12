@@ -12,6 +12,7 @@ namespace bot7
         static IAudioClient audioClient;
         static public DiscordSocketClient client;
         static string botsCannal = "";
+        public static ulong channelId ;
         static async Task Main(string[] args)
         {
             try
@@ -123,8 +124,7 @@ namespace bot7
         }
         public static async Task MessageInChannel(string message)
         {
-            ulong chan = 1229272739303526501;
-            var chanelawait = (await client.GetChannelAsync(chan)) as IMessageChannel;
+            var chanelawait = (await client.GetChannelAsync(channelId)) as IMessageChannel;
             await chanelawait.SendMessageAsync(message);
             return;
         }
@@ -147,7 +147,7 @@ namespace bot7
                 .WithButton(buttonBuilder);
 
             // Send the message with the component (button)
-            chanelawait.SendMessageAsync("message", components: componentBuilder.Build());
+            await chanelawait.SendMessageAsync("message", components: componentBuilder.Build());
             return;
         }
 

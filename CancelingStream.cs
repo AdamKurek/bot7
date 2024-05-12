@@ -73,9 +73,9 @@ namespace bot7
             {
                 if (CanWrite)
                 {
-                    throw new InvalidOperationException("you can't write tho");
+                    throw new InvalidOperationException("you can't write to this stream");
                 }
-                throw new InvalidOperationException("you can't read tho");
+                throw new InvalidOperationException("you can't read this stream");
             }
 
             return Core(this, destination, bufferSize, cancellationToken);
