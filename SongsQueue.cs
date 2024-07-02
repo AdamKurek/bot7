@@ -13,6 +13,7 @@ namespace bot7
         List<T> queue;
         public T DefaultSong { get; set; }
         object o = new object();
+
         public SongsQueuee(T @default)
         {
             queue = new List<T>();
@@ -45,6 +46,7 @@ namespace bot7
         {
             queue.Insert(v, url);
         }
+
         internal void AppendEnd(IEnumerable<T> url)
         {
             queue.AddRange(url);

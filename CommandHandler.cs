@@ -34,7 +34,6 @@ namespace bot7
             int argPos = 0;
             if (!(message.HasCharPrefix('!', ref argPos) || message.HasMentionPrefix(_client.CurrentUser, ref argPos)) || message.Author.IsBot)
                 return;
-
             var context = new SocketCommandContext(_client, message);
             await _commands.ExecuteAsync(context: context, argPos: argPos, services: null);
         }

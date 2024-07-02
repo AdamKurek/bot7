@@ -25,7 +25,6 @@ namespace bot7
         public static CancellationTokenSource _recordingCancellationTokenSource = new CancellationTokenSource();
         private readonly static string defaultSong = "https://www.youtube.com/watch?v=woNw5Dyqhzo";
 
-        private static Process _currentProcess = null!;
         public static IAudioClient? audioClient;
         public static Thread? thread;
         public static Thread? recordingThread;
@@ -33,12 +32,8 @@ namespace bot7
         private static YoutubeClient youtube = new YoutubeClient();
         static SongsQueuee<(string, songType)> queue = new((defaultSong, songType.ytSong));
         static SocketVoiceState? voiceState;
-        static long pausedAt = 0;
-        static Semaphore semaphore = new(1, 1);
+        static Semaphore PlaySemaphore = new(1, 1);
         static bool cutIn = false;
-
-        //Whisper.iAudioBuffer? buffer;
-
 
         internal async Task SongsThread()
         {
@@ -49,7 +44,7 @@ namespace bot7
                     //var discordstream = client.CreatePCMStream(AudioApplication.Mixed)
                     audioClient = await voiceState.Value.VoiceChannel.ConnectAsync(false, false, false, false);
                 }
-                _cancellationTokenSource = new();
+                ResetToken();
                 while (true)
                 {
                     var token = _cancellationTokenSource.Token;
@@ -113,62 +108,59 @@ namespace bot7
             {
                 foreach (var user in userCollection)
                 {
-                    if (user.IsBot || user is not SocketGuildUser guilduser)
+                    if (user.IsBot || user is not SocketGuildUser guilduser || guilduser.AudioStream == null)
                     {
                         continue;
                     }
-                    if (guilduser.AudioStream != null)
+                    listeningThreads.Add(new Thread(async () =>
                     {
-                        listeningThreads.Add(new Thread(async () =>
+                        for (int i = 0; true; i++)
                         {
-                            for (int i = 0; true; i++)
+                            var filePath = $"outputAudioFile{user.GlobalName}{i++}.webm";
+                            if (File.Exists(filePath))
                             {
-                                var filePath = $"outputAudioFile{user.GlobalName}{i++}.webm";
-                                if (File.Exists(filePath))
+                                File.Delete(filePath);
+                            }
+                            string ffmpegPath = "ffmpeg";
+                            string arguments = $"-y -f s16le -ar 48000 -ac 2 -i pipe:0 -c:a libvorbis {filePath}";
+                            using (Process ffmpegProcess = new Process())
+                            {
+                                ProcessStartInfo startInfo = new ProcessStartInfo
                                 {
-                                    File.Delete(filePath);
-                                }
-                                string ffmpegPath = "ffmpeg";
-                                string arguments = $"-y -f s16le -ar 48000 -ac 2 -i pipe:0 -c:a libvorbis {filePath}";
-                                using (Process ffmpegProcess = new Process())
+                                    FileName = ffmpegPath,
+                                    Arguments = arguments,
+                                    UseShellExecute = false,
+                                    RedirectStandardInput = true,
+                                    RedirectStandardOutput = true,
+                                    RedirectStandardError = true,
+                                    CreateNoWindow = true,
+                                };
+                                ffmpegProcess.StartInfo = startInfo;
+                                ffmpegProcess.Start();
+                                using (var audioStream = guilduser.AudioStream)
                                 {
-                                    ProcessStartInfo startInfo = new ProcessStartInfo
+                                    using (var stdin = ffmpegProcess.StandardInput.BaseStream)
                                     {
-                                        FileName = ffmpegPath,
-                                        Arguments = arguments,
-                                        UseShellExecute = false,
-                                        RedirectStandardInput = true,
-                                        RedirectStandardOutput = true,
-                                        RedirectStandardError = true,
-                                        CreateNoWindow = true,
-                                    };
-                                    ffmpegProcess.StartInfo = startInfo;
-                                    ffmpegProcess.Start();
-                                    using (var audioStream = guilduser.AudioStream)
-                                    {
-                                        using (var stdin = ffmpegProcess.StandardInput.BaseStream)
+                                        EndOfStreamWrapper endOfStreamWrapper = new(audioStream);
+                                        try
                                         {
-                                            EndOfStreamWrapper endOfStreamWrapper = new(audioStream);
-                                            try
-                                            {
-                                                await endOfStreamWrapper.CopyToAsync(stdin, _recordingCancellationTokenSource.Token);
-                                            }
-                                            catch (Exception e)
-                                            {
-                                                Console.WriteLine(e.Message);
-                                            }
-                                            finally
-                                            {
-                                                await ffmpegProcess.StandardInput.WriteLineAsync("q");
-                                                ffmpegProcess.WaitForExit();
-                                                await stdin.FlushAsync();
-                                            }
+                                            await endOfStreamWrapper.CopyToAsync(stdin, _recordingCancellationTokenSource.Token);
+                                        }
+                                        catch (Exception e)
+                                        {
+                                            Console.WriteLine(e.Message);
+                                        }
+                                        finally
+                                        {
+                                            await ffmpegProcess.StandardInput.WriteLineAsync("q");
+                                            ffmpegProcess.WaitForExit();
+                                            await stdin.FlushAsync();
                                         }
                                     }
                                 }
                             }
-                        }));
-                    }
+                        }
+                    }));
                 }
                 foreach (var thread in listeningThreads)
                 {
@@ -179,7 +171,7 @@ namespace bot7
 
         [Command("play")]
         [Alias("p")]
-        public async Task PlayCommand(string url = defaultSong)
+        public async Task PlayCommand(string url = "https://www.youtube.com/watch?v=woNw5Dyqhzo")
         {
             _stop = false;
             if (!await JoinChannel())
@@ -192,7 +184,6 @@ namespace bot7
                 if (urls.Count() > 0)
                 {
                     queue.AppendFront(urls);
-                    //Console.WriteLine("otuz " + urls.Contains(url) + url.IndexOf(url));
                 }
                 else
                 {
@@ -200,18 +191,23 @@ namespace bot7
                 }
                 RunOrContinueSongsThread();
                 _cancellationTokenSource.Cancel();
-                _cancellationTokenSource = new();
+                ResetToken();
             }
             catch (Exception e)
             {
-                Console.WriteLine("t " + e.Message);
+                Console.WriteLine(e.Message);
             }
         }
 
+        private static void ResetToken()
+        {
+            _cancellationTokenSource.Dispose();
+            _cancellationTokenSource = new();
+        }
 
         [Command("enqueue")]
         [Alias("pushback", "enq", "q", "potem", "queue")]
-        public async Task QCommand(string url = defaultSong)
+        public async Task QCommand(string url = "https://www.youtube.com/watch?v=woNw5Dyqhzo")
         {
             if(!await JoinChannel())
             {
@@ -255,7 +251,7 @@ namespace bot7
 
         [Command("quickplay")]
         [Alias("qp", "slide", "cutin")]
-        public async Task QuickplayCommand(string url = defaultSong)
+        public async Task QuickplayCommand(string url = "https://www.youtube.com/watch?v=woNw5Dyqhzo")
         {
             _stop = false;
             if (!await JoinChannel())
@@ -265,11 +261,9 @@ namespace bot7
             try
             {
                 EnqueueYtSongOrPlaylist(url);
-
                 RunOrContinueSongsThread();
                 cutIn = true;
                 _cancellationTokenSource.Cancel();
-
             }
             catch (Exception e)
             {
@@ -292,7 +286,7 @@ namespace bot7
 
         [Command("set default")]
         [Alias("default", "d", "kółkuj", "loop")]
-        public async Task SetDefault(string url = defaultSong)
+        public async Task SetDefault(string url = "https://www.youtube.com/watch?v=woNw5Dyqhzo")
         {
             queue.DefaultSong = (url, songType.ytSong);
         }
@@ -313,7 +307,6 @@ namespace bot7
                 }
             }
             await ReplyAsync(mess);
-
         }
 
         [Command("skip")]
@@ -337,7 +330,7 @@ namespace bot7
                 createRunThread();
                 return;
             }
-            if (thread.ThreadState == System.Threading.ThreadState.Stopped)
+            if (false)//TODO
             {
                 thread.Join();
                 createRunThread();
@@ -356,22 +349,24 @@ namespace bot7
         private static void SkipSong()
         {
             var currentTokenSource = _cancellationTokenSource;
-            _cancellationTokenSource = new();
+            //ResetToken();
+            _cancellationTokenSource = new CancellationTokenSource();
             currentTokenSource.Cancel();
+            currentTokenSource.Dispose();
         }
 
         [Command("pause")]
         public async Task PauseCommand()
         {
             _cancellationTokenSource.Cancel();
-            semaphore.WaitOne();
+            PlaySemaphore.WaitOne();
         }
 
         [Command("resume")]
         [Alias("r")]
         public async Task ResumeCommand()
         {
-            semaphore.Release();
+            PlaySemaphore.Release();
         }
 
         [Command("stop")]
@@ -399,9 +394,6 @@ namespace bot7
         [Command("text")]
         public async Task TextCommand()
         {
-            //string[] tokeny = { "-m", "Models/ggml-medium.bin" , "outputAudioFile.webm"};
-            //WhisperMain.WhisperRun(tokeny);
-
             var modelName = "ggml-medium.bin"; // Specify the model name you want to download
                                                //if (!File.Exists(modelName))
                                                //{
@@ -409,7 +401,7 @@ namespace bot7
                                                //    using var fileWriter = File.OpenWrite(modelName);
                                                //    await modelStream.CopyToAsync(fileWriter);
                                                //}
-            string inputFile = "outputAudioFile.webm"; // Path to the recorded WebM file
+            string inputFile = "outputAudioFilekaczek0.webm"; // Path to the recorded WebM file
             string outputFile = "outputFile.wav"; // Desired output .wav file
             if (File.Exists(outputFile))
             {
@@ -451,6 +443,7 @@ namespace bot7
                 await foreach (var result in processor.ProcessAsync(fileStream))
                 {
                     Console.WriteLine($"{result.Start}->{result.End}: {result.Text}");
+                    await ReplyAsync($"{result.Text}");
                 }
             }
             catch (Exception e)
@@ -463,7 +456,7 @@ namespace bot7
         {
             try
             {
-                semaphore.Release();
+                PlaySemaphore.Release();
             }
             catch (Exception ex) { }
             _cancellationTokenSource.Cancel();
@@ -495,10 +488,6 @@ namespace bot7
         }
         private static Process CreateStream((string, songType) path)
         {
-            if (_currentProcess != null)
-            {
-                _currentProcess.Dispose();
-            }
             float volume = 1f;
             if (path.Item2 == songType.ytSong)
             {
@@ -519,10 +508,6 @@ namespace bot7
         private async static Task<string> CreateFileFromYt(string url, int iteration)
         {
 
-            if (_currentProcess != null)
-            {
-                _currentProcess.Dispose();
-            }
             try
             {
                 var streamManifest = await youtube.Videos.Streams.GetManifestAsync(url);
@@ -530,12 +515,7 @@ namespace bot7
                 string file = $"audio{iteration}.{streamInfo.Container}";
                 if (streamInfo != null)
                 {
-                    //       if (!File.Exists($"audio.{streamInfo.Container}"))
-                    {
-                        //       Console.WriteLine($"audio.{streamInfo.Container}");
-                        await youtube.Videos.Streams.DownloadAsync(streamInfo, file);
-                    }
-                    //     Console.WriteLine($"audio.{streamInfo.Container}");
+                    await youtube.Videos.Streams.DownloadAsync(streamInfo, file);
                 }
                 return file;
             }
@@ -594,13 +574,13 @@ namespace bot7
                                 cutIn = false;
                                 await SendAsyncYT(client, queue.Dequeue(), depth + 1);
                             }
-                            _cancellationTokenSource = new();
+                            ResetToken();
                             if (_stop)
                             {
                                 _stop = false;
                                 break;
                             }
-                            semaphore.WaitOne();
+                            PlaySemaphore.WaitOne();
                             try
                             {
                                 await output.CopyToAsync(discordstream, _cancellationTokenSource.Token);
@@ -608,7 +588,7 @@ namespace bot7
                             catch (Exception e) { }
                             finally
                             {
-                                semaphore.Release();
+                                PlaySemaphore.Release();
                             }
                         } while (_cancellationTokenSource.IsCancellationRequested);
                     }
@@ -649,6 +629,7 @@ namespace bot7
             }
         }
 
+        
         [Command("ButtonClicked")]
         public async Task YourCommand()
         {

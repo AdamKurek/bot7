@@ -23,7 +23,6 @@ namespace bot7
             {
                 Console.WriteLine(ex.Message);
             }
-
             var config = new DiscordSocketConfig()
             {
                 GatewayIntents = GatewayIntents.All
@@ -67,7 +66,6 @@ namespace bot7
         {
             if(arg.Type == InteractionType.MessageComponent)
             {
-
                 arg.RespondAsync("xd");
             }
             return Task.CompletedTask;
@@ -129,13 +127,11 @@ namespace bot7
             return;
         }
 
-        public static async Task MessageInChannel(string message, string id)
+        public static async Task MessageInChannel(string message, ulong id = 1229272739303526501)
         {
-            
             //degenerate = 866745065020063747
             // botkanal  = 1229272739303526501
-            ulong chan = 1229272739303526501;
-            var chanelawait = (await client.GetChannelAsync(chan)) as IMessageChannel;
+            var chanelawait = (await client.GetChannelAsync(id)) as IMessageChannel;
             await chanelawait.SendMessageAsync(message);
             var buttonBuilder = new ButtonBuilder()
             .WithLabel("<3")
@@ -165,34 +161,11 @@ namespace bot7
             {
                 //Process.Start("shutdown", "/s /t 5");
             }
-                if (message.Content == "!play")
+            if (message.Content == "!play")
+            {
                 await client.SetCustomStatusAsync("Jedzie audicą Leona");
-
+            }
             return;
-            if (message == null) return;
-            if (message.Author.IsBot) return;
-            if (message.Content != "jd") return;
-            var voiceChannel = (message.Author as IGuildUser)?.VoiceChannel;
-            if (voiceChannel == null)
-            {
-                await message.Channel.SendMessageAsync("na kanał wejdz");
-                return;
-            }
-            try
-            {
-                //Discord.Audio.IAudioClient audio;
-                //audio.
-                audioClient = await voiceChannel.ConnectAsync(true, false, false, false);
-                Console.WriteLine(" przeszed");
-
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine(" xd " + e);
-                await message.Channel.SendMessageAsync(e.ToString());
-            }
-            string response = "hihi";
-            await message.Channel.SendMessageAsync(response);
         }
 
     }

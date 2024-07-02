@@ -1,11 +1,6 @@
 ﻿using Discord.Audio;
-using System;
 using System.Buffers;
-using System.Collections.Generic;
-using System.Linq;
 using System.Runtime.InteropServices;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace bot7
 {
@@ -19,21 +14,14 @@ namespace bot7
         }
 
         public override bool CanRead => _innerStream.CanRead;
-
         public override bool CanSeek => _innerStream.CanSeek;
-
         public override bool CanWrite => _innerStream.CanWrite;
-
         public override long Length => _innerStream.Length;
-
         public override long Position { get => _innerStream.Position; set => _innerStream.Position = value; }
-
         public override void Flush()
         {
             _innerStream.Flush();
         }
-
-       
 
         public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
         {
@@ -86,7 +74,7 @@ namespace bot7
                 var cts = new CancellationTokenSource();
                 var token = cts.Token;
 
-                using var timer = new System.Timers.Timer() { AutoReset = false,  };
+                using var timer = new System.Timers.Timer() { AutoReset = false, };
                 timer.Interval = 300;
                 timer.Elapsed += (o,s)=>{ 
                         cts.Cancel();
@@ -163,5 +151,6 @@ namespace bot7
         {
             return _innerStream.Read(buffer, offset, count);
         }
+
     }
 }
