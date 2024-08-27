@@ -58,5 +58,16 @@ namespace bot7
             list.AddRange(queue);
             queue = list;
         }
+
+        internal bool empty()
+        {
+            return queue.Count == 0 ? true : false;
+        }
+
+        internal void Clear()
+        {
+            queue.Clear();
+        }
+
     }
 }

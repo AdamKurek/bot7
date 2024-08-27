@@ -1,11 +1,6 @@
 ﻿using Discord.Commands;
 using Discord.WebSocket;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Reflection;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace bot7
 {
@@ -35,7 +30,7 @@ namespace bot7
             if (!(message.HasCharPrefix('!', ref argPos) || message.HasMentionPrefix(_client.CurrentUser, ref argPos)) || message.Author.IsBot)
                 return;
             var context = new SocketCommandContext(_client, message);
-            await _commands.ExecuteAsync(context: context, argPos: argPos, services: null);
+            await _commands.ExecuteAsync(context: context, argPos: argPos, services: null, multiMatchHandling: MultiMatchHandling.Best);
         }
     }
 }

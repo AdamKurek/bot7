@@ -5,21 +5,17 @@ using Discord.Audio;
 using System.Diagnostics;
 using YoutubeExplode;
 using YoutubeExplode.Videos.Streams;
-using AngleSharp.Dom;
 using YoutubeExplode.Playlists;
 using System.Speech.Synthesis;
 using System.Globalization;
 using Whisper.net;
+using AngleSharp.Dom;
+using System.IO;
 
 namespace bot7
 {
     public class VoiceCommands : ModuleBase<SocketCommandContext>
     {
-        public enum songType
-        {
-            ytSong,
-            Voice
-        }
 
         public static CancellationTokenSource _cancellationTokenSource = new CancellationTokenSource();
         public static CancellationTokenSource _recordingCancellationTokenSource = new CancellationTokenSource();
@@ -30,7 +26,7 @@ namespace bot7
         public static Thread? recordingThread;
         public static bool _stop = false;
         private static YoutubeClient youtube = new YoutubeClient();
-        static SongsQueuee<(string, songType)> queue = new((defaultSong, songType.ytSong));
+        static SongsQueuee<InQueueSong> queue = new((defaultSong, 0.5f));
         static SocketVoiceState? voiceState;
         static Semaphore PlaySemaphore = new(1, 1);
         static bool cutIn = false;
@@ -41,15 +37,18 @@ namespace bot7
             {
                 if (audioClient == null)
                 {
-                    //var discordstream = client.CreatePCMStream(AudioApplication.Mixed)
                     audioClient = await voiceState.Value.VoiceChannel.ConnectAsync(false, false, false, false);
                 }
                 ResetToken();
                 while (true)
                 {
                     var token = _cancellationTokenSource.Token;
+                    if (queue.empty())
+                    {
+                        AddSongsFromPlaylistToQueue(queue.DefaultSong.Url, true);
+                    }
                     var currUrl = queue.Dequeue();
-                    await ReplyAsync("playing " + currUrl.Item1);
+                    await ReplyAsync("playing " + currUrl.Url);
                     await SendAsyncYT(audioClient, currUrl);
                     if (token.IsCancellationRequested)
                     {
@@ -59,7 +58,7 @@ namespace bot7
             }
             catch (Exception e)
             {
-                Console.WriteLine("it " + e.Message);
+                Console.WriteLine("songs thread: " + e.Message);
             }
         }
 
@@ -67,36 +66,12 @@ namespace bot7
         {
             try
             {
-
-                //if (audioClient == null)
-                {
-                    //audioClient = await voiceState.Value.VoiceChannel.ConnectAsync(false, false, false, false);
-                }
-
-                //var audioClient = await channel.ConnectAsync();
-                //var audioStream = audioClient.CreatePCMStream(AudioApplication.Mixed);
-                //using (var fileStream = File.Create("voices.pcm"))
-                //{
-                //    await audioStream.CopyToAsync(fileStream);
-                //}
-
-                //var channel = channel ?? (Context.User as IGuildUser)?.VoiceChannel;
-                //if (channel == null)
-                {
-                    // await ReplyAsync("User must be in a voice channel, or a voice channel must be passed as an argument.");
-                    // return;
-                }
-                // Transmit silence to comply with Discord's requirements
-                //var audioClient = await channel.ConnectAsync();
-                //await TransmitSilenceAsync(audioClient);
-                // Listen to the audio stream
                 _recordingCancellationTokenSource = new();
                 await ListenToAudioStream(voiceState.Value.VoiceChannel);
-                //WhisperMain.WhisperRun(Array.Empty<string>());
             }
             catch (Exception e)
             {
-                Console.WriteLine("it " + e.Message);
+                Console.WriteLine("recording thread: " + e.Message);
             }
         }
 
@@ -180,14 +155,9 @@ namespace bot7
             }
             try
             {
-                var urls = TryAsPlaylist(url);
-                if (urls.Count() > 0)
+                if (!AddSongsFromPlaylistToQueue(url, true))
                 {
-                    queue.AppendFront(urls);
-                }
-                else
-                {
-                    queue.insert(0, (url, songType.ytSong));
+                    queue.insert(0, (url, 0.5f));
                 }
                 RunOrContinueSongsThread();
                 _cancellationTokenSource.Cancel();
@@ -197,6 +167,13 @@ namespace bot7
             {
                 Console.WriteLine(e.Message);
             }
+        }
+        [Command("playdefault")]
+        [Alias("pd", "playanddefault")]
+        public async Task PlayDefaultCommand(string url = "https://www.youtube.com/watch?v=woNw5Dyqhzo")
+        {
+            await PlayCommand(url);
+            await SetDefaultCommand(url);
         }
 
         private static void ResetToken()
@@ -215,21 +192,32 @@ namespace bot7
             }
             try
             {
-                var urls = TryAsPlaylist(url);
-                if (urls.Count() > 0)
+                if(!AddSongsFromPlaylistToQueue(url))
                 {
-                    queue.AppendEnd(urls);
-                }
-                else
-                {
-                    queue.enqueue((url, songType.ytSong));
+                    queue.enqueue((url, 0.5f));
                 }
                 RunOrContinueSongsThread();
             }
             catch (Exception e)
             {
-                Console.WriteLine("t " + e.Message);
+                Console.WriteLine("q command: " + e.Message);
             }
+        }
+
+        private bool AddSongsFromPlaylistToQueue(string url, bool front = false)
+        {
+            var urls = TryAsPlaylist(url);
+            if (urls.Count() > 0)
+            {
+                if (front)
+                {
+                    queue.AppendFront(urls);
+                    return true;
+                }
+                queue.AppendEnd(urls);
+                return true;
+            }
+            return false;
         }
 
         private async Task<bool> JoinChannel()
@@ -244,7 +232,6 @@ namespace bot7
             {
                 await ReplyAsync("VC.");
                 return false;
-
             }
             return true;
         }
@@ -260,18 +247,18 @@ namespace bot7
             }
             try
             {
-                EnqueueYtSongOrPlaylist(url);
+                queue.insert(0, (url, 0.5f));
                 RunOrContinueSongsThread();
                 cutIn = true;
                 _cancellationTokenSource.Cancel();
             }
             catch (Exception e)
             {
-                Console.WriteLine("t " + e.Message);
+                Console.WriteLine("q command: " + e.Message);
             }
         }
 
-        private static void EnqueueYtSongOrPlaylist(string url)
+        private static void EnqueueFrontYtSongOrPlaylist(string url)
         {
             var urls = TryAsPlaylist(url);
             if (urls.Count() > 0)
@@ -280,15 +267,15 @@ namespace bot7
             }
             else
             {
-                queue.insert(0, (url, songType.ytSong));
+                queue.insert(0, (url, 0.5f));
             }
         }
 
         [Command("set default")]
         [Alias("default", "d", "kółkuj", "loop")]
-        public async Task SetDefault(string url = "https://www.youtube.com/watch?v=woNw5Dyqhzo")
+        public async Task SetDefaultCommand(string url = "https://www.youtube.com/watch?v=woNw5Dyqhzo")
         {
-            queue.DefaultSong = (url, songType.ytSong);
+            queue.DefaultSong = (url, 0.5f);
         }
 
         [Command("list")]
@@ -298,7 +285,7 @@ namespace bot7
             int count = 0;
             foreach (var s in queue)
             {
-                mess += s.Item1 + '\n';
+                mess += s.Url + '\n';
                 count++;
                 if (count % 20 == 0)
                 {
@@ -310,7 +297,7 @@ namespace bot7
         }
 
         [Command("skip")]
-        [Alias("next", "s")]
+        [Alias("next", "s", "end")]
         public async Task SkipCommand()
         {
             SkipSong();
@@ -320,7 +307,7 @@ namespace bot7
         [Alias("refresh", "refresh queue")]
         public async Task RefreshCommand()
         {
-            queue = new((defaultSong, songType.ytSong));
+            queue.Clear();
         }
 
         private void RunOrContinueSongsThread()
@@ -330,9 +317,9 @@ namespace bot7
                 createRunThread();
                 return;
             }
-            if (false)//TODO
             {
-                thread.Join();
+                thread.Join(500);
+                thread = null;
                 createRunThread();
                 return;
             }
@@ -382,13 +369,6 @@ namespace bot7
             recordingThread = new Thread(async () => { await RecordingThread(); });
             recordingThread.Start();
             recordingThread.Join();
-        }
-
-        [Command("reco")]
-        [Alias("rec stop")]
-        public async Task RecordStopCommand()
-        {
-            _recordingCancellationTokenSource.Cancel();
         }
 
         [Command("text")]
@@ -448,7 +428,7 @@ namespace bot7
             }
             catch (Exception e)
             {
-                Console.WriteLine("ebege = " + e);
+                Console.WriteLine("textcommand: " + e);
             }
         }
 
@@ -461,16 +441,16 @@ namespace bot7
             catch (Exception ex) { }
             _cancellationTokenSource.Cancel();
             _stop = true;
-            thread.Join();
+            thread?.Join();
             thread = null;
         }
 
         public static async Task BotSpeak(string text)
         {
-            await BudgetQuickplayCommand((await CreateFileText(text, 0), songType.Voice));
+            BudgetQuickplayCommand((await CreateFileText(text, 0), 0.5f));
         }
 
-        public async static Task BudgetQuickplayCommand((string, songType) path)
+        public static void BudgetQuickplayCommand(InQueueSong path)
         {
             _stop = false;
             if (voiceState?.VoiceChannel != null)
@@ -486,19 +466,13 @@ namespace bot7
             Console.WriteLine("logged " + arg.Message);
             return null!;
         }
-        private static Process CreateStream((string, songType) path)
+        private static Process CreateStream((string, float) path)
         {
-            float volume = 1f;
-            if (path.Item2 == songType.ytSong)
-            {
-                volume = 0.7f;
-            }
-
 #pragma warning disable CS8603 // Possible null reference return.
             return Process.Start(new ProcessStartInfo
             {
                 FileName = "ffmpeg",
-                Arguments = $"-hide_banner -loglevel panic -i \"{path.Item1}\" -af \"volume={volume.ToString("0.0")}\" -ac 2 -f s16le -ar 48000 pipe:1",
+                Arguments = $"-hide_banner -loglevel panic -i \"{path.Item1}\" -af \"volume={path.Item2.ToString("0.0")}\" -ac 2 -f s16le -ar 48000 pipe:1",
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
             });
@@ -507,10 +481,10 @@ namespace bot7
 
         private async static Task<string> CreateFileFromYt(string url, int iteration)
         {
-
             try
             {
                 var streamManifest = await youtube.Videos.Streams.GetManifestAsync(url);
+                
                 var streamInfo = streamManifest.GetAudioOnlyStreams().TryGetWithHighestBitrate();
                 string file = $"audio{iteration}.{streamInfo.Container}";
                 if (streamInfo != null)
@@ -551,14 +525,16 @@ namespace bot7
                 Console.WriteLine(e.ToString());
                 return "failed creating file";
             }
+
+
         }
 
         static AudioOutStream? discordstream = null;
-        public static async Task SendAsyncYT(IAudioClient client, (string, songType) path, int depth = 0)
+        public static async Task SendAsyncYT(IAudioClient client, InQueueSong path, int depth = 0)
         {
             try
             {
-                using (var currentProcess = CreateStream(IsFromYoutube(path.Item1) ? (await CreateFileFromYt(path.Item1, depth), songType.ytSong) : path))
+                using (var currentProcess = CreateStream(IsFromYoutube(path.Url) ? (await CreateFileFromYt(path.Url, depth), path.Volume) : path))
                 using (var output = currentProcess.StandardOutput.BaseStream)
                 {
                     if (discordstream == null)
@@ -603,7 +579,7 @@ namespace bot7
             }
             catch (Exception e)
             {
-                Console.WriteLine("flushbug:" + e.Message);
+                Console.WriteLine("flushbug: " + e.Message);
             }
         }
 
@@ -612,12 +588,13 @@ namespace bot7
             return path.Substring(0, 5).ToLower() == "https";
         }
 
-        public static IEnumerable<(string, songType)> TryAsPlaylist(string url)
+        public static IEnumerable<InQueueSong> TryAsPlaylist(string url)
         {
             IEnumerable<PlaylistVideo> vids = null;
             try
             {
                 vids = youtube.Playlists.GetVideosAsync(url).ToEnumerable();
+
             }
             catch (Exception e)
             {
@@ -625,17 +602,17 @@ namespace bot7
             }
             foreach (var vid in vids)
             {
-                yield return (vid.Url, songType.ytSong);
+                yield return (vid.Url, 0.5f);
             }
         }
 
-        
+        //todo
         [Command("ButtonClicked")]
         public async Task YourCommand()
         {
             Console.WriteLine("xd");
         }
-
+        //todo
         public async Task HandleButtonClick(SocketMessageComponent component)
         {
             Console.WriteLine("xd2");
@@ -646,5 +623,18 @@ namespace bot7
             }
         }
 
+    }
+
+    public record struct InQueueSong(string Url, float Volume)
+    {
+        public static implicit operator (string, float)(InQueueSong value)
+        {
+            return (value.Url, value.Volume);
+        }
+
+        public static implicit operator InQueueSong((string, float) value)
+        {
+            return new InQueueSong(value.Item1, value.Item2);
+        }
     }
 }

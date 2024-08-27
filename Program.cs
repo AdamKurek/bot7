@@ -9,9 +9,7 @@ namespace bot7
 {
     internal class Program
     {
-        static IAudioClient audioClient;
         static public DiscordSocketClient client;
-        static string botsCannal = "";
         public static ulong channelId ;
         static async Task Main(string[] args)
         {
@@ -82,7 +80,6 @@ namespace bot7
             
             if (user.IsBot)
             {
-                botsCannal = state2.VoiceChannel?.Name;
                 return;
             }
          /*   if (state1.VoiceChannel is object ? state1.VoiceChannel.Name != state2.VoiceChannel.Name : true&& state2.VoiceChannel.Name == botsCannal)
