@@ -64,6 +64,11 @@ namespace bot7
             return queue.Count == 0 ? true : false;
         }
 
+        internal void RemoveFirst(int count)
+        {
+            if (queue.Count == 0) return;
+            queue.RemoveRange(0, count);
+        }
         internal void Clear()
         {
             queue.Clear();

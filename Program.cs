@@ -3,6 +3,8 @@ using Discord;
 using Discord.Audio;
 using Discord.Commands;
 using Discord.WebSocket;
+using Swan;
+using System.ComponentModel;
 using System.Diagnostics;
 
 namespace bot7
@@ -10,7 +12,6 @@ namespace bot7
     internal class Program
     {
         static public DiscordSocketClient client;
-        public static ulong channelId ;
         static async Task Main(string[] args)
         {
             try
@@ -41,6 +42,7 @@ namespace bot7
             
             client.VoiceChannelStatusUpdated += Client_VoiceChannelStatusUpdated;
             client.InteractionCreated += Client_InteractionCreated;
+            client.ButtonExecuted += Client_ButtonExecuted;
             //Thread.Sleep(10000000);
             await client.SetCustomStatusAsync("Proszę beton");
             try
@@ -60,13 +62,15 @@ namespace bot7
             }
         }
 
-        private static Task Client_InteractionCreated(SocketInteraction arg)
+        private static async Task Client_ButtonExecuted(SocketMessageComponent arg)
         {
-            if(arg.Type == InteractionType.MessageComponent)
-            {
-                arg.RespondAsync("xd");
-            }
-            return Task.CompletedTask;
+            await VoiceCommands.HandleButtonClick(arg);
+           // message.
+
+        }
+
+        private static async Task Client_InteractionCreated(SocketInteraction arg)
+        {
         }
 
         private static Task Client_VoiceChannelStatusUpdated(Cacheable<SocketVoiceChannel, ulong> arg1, string arg2, string arg3)
@@ -117,32 +121,40 @@ namespace bot7
                 }
             }*/
         }
-        public static async Task MessageInChannel(string message)
-        {
-            var chanelawait = (await client.GetChannelAsync(channelId)) as IMessageChannel;
-            await chanelawait.SendMessageAsync(message);
-            return;
-        }
 
-        public static async Task MessageInChannel(string message, ulong id = 1229272739303526501)
+       
+        static IUserMessage userMessage;
+        public static async Task SendCurrentPlayingMessage(IMessageChannel chanelawait, string message, bool paused = false)
         {
-            //degenerate = 866745065020063747
-            // botkanal  = 1229272739303526501
-            var chanelawait = (await client.GetChannelAsync(id)) as IMessageChannel;
-            await chanelawait.SendMessageAsync(message);
-            var buttonBuilder = new ButtonBuilder()
-            .WithLabel("<3")
-            .WithStyle(ButtonStyle.Primary)
-            .WithCustomId("id");
+            var buttonBuilder1 = new ButtonBuilder()
+                .WithStyle(ButtonStyle.Secondary)
+                .WithEmote(new Emoji("👎"))
+                .WithCustomId("Skip");
 
-            // Create a component builder and add the button to it
+            var buttonBuilder2 = paused?
+                new ButtonBuilder()
+                .WithStyle(ButtonStyle.Success)
+                .WithEmote(new Emoji("▶️"))
+                .WithCustomId("Resume"):
+                new ButtonBuilder()
+                .WithStyle(ButtonStyle.Danger)
+                .WithEmote(new Emoji("⏹️"))
+                .WithCustomId("Pause");
+
+            var buttonBuilder4 = new ButtonBuilder()
+               .WithStyle(ButtonStyle.Danger)
+               .WithEmote(new Emoji("🗑️"))
+               .WithCustomId("Clear");
+
             var componentBuilder = new ComponentBuilder()
-                .WithButton(buttonBuilder);
+                .WithButton(buttonBuilder1)
+                .WithButton(buttonBuilder2)
+                .WithButton(buttonBuilder4);
 
-            // Send the message with the component (button)
-            await chanelawait.SendMessageAsync("message", components: componentBuilder.Build());
-            return;
+            userMessage?.DeleteAsync(); 
+            userMessage = await chanelawait.SendMessageAsync($"{message}", components: componentBuilder.Build());
         }
+
 
         private static Task Client_Log(LogMessage arg)
         {

@@ -31,6 +31,8 @@ namespace bot7
         static Semaphore PlaySemaphore = new(1, 1);
         static bool cutIn = false;
 
+
+
         internal async Task SongsThread()
         {
             try
@@ -48,7 +50,8 @@ namespace bot7
                         AddSongsFromPlaylistToQueue(queue.DefaultSong.Url, true);
                     }
                     var currUrl = queue.Dequeue();
-                    await ReplyAsync("playing " + currUrl.Url);
+                    //await ReplyAsync("playing " + currUrl.Url);
+                    await Program.SendCurrentPlayingMessage(Context.Channel, $"Playing {currUrl.Url}");
                     await SendAsyncYT(audioClient, currUrl);
                     if (token.IsCancellationRequested)
                     {
@@ -61,6 +64,7 @@ namespace bot7
                 Console.WriteLine("songs thread: " + e.Message);
             }
         }
+
 
         internal async Task RecordingThread()
         {
@@ -168,6 +172,7 @@ namespace bot7
                 Console.WriteLine(e.Message);
             }
         }
+
         [Command("playdefault")]
         [Alias("pd", "playanddefault")]
         public async Task PlayDefaultCommand(string url = "https://www.youtube.com/watch?v=woNw5Dyqhzo")
@@ -298,9 +303,13 @@ namespace bot7
 
         [Command("skip")]
         [Alias("next", "s", "end")]
-        public async Task SkipCommand()
+        public async Task SkipCommand(int count = 1)
         {
-            SkipSong();
+            if (count > 0)
+            {
+                SkipSong();
+                queue.RemoveFirst(count);
+            }
         }
 
         [Command("empty queue")]
@@ -317,6 +326,7 @@ namespace bot7
                 createRunThread();
                 return;
             }
+            if(false)//if some bug
             {
                 thread.Join(500);
                 thread = null;
@@ -345,6 +355,11 @@ namespace bot7
         [Command("pause")]
         public async Task PauseCommand()
         {
+            PausePlaying();
+        }
+
+        private static void PausePlaying()
+        {
             _cancellationTokenSource.Cancel();
             PlaySemaphore.WaitOne();
         }
@@ -352,6 +367,11 @@ namespace bot7
         [Command("resume")]
         [Alias("r")]
         public async Task ResumeCommand()
+        {
+            ResumePlaying();
+        }
+
+        private static void ResumePlaying()
         {
             PlaySemaphore.Release();
         }
@@ -495,7 +515,7 @@ namespace bot7
             }
             catch (Exception e)
             {
-                Console.WriteLine(e.ToString());
+                Console.WriteLine("CreatingFileError: " + e.ToString());
                 return "";
             }
         }
@@ -525,8 +545,6 @@ namespace bot7
                 Console.WriteLine(e.ToString());
                 return "failed creating file";
             }
-
-
         }
 
         static AudioOutStream? discordstream = null;
@@ -606,20 +624,41 @@ namespace bot7
             }
         }
 
-        //todo
         [Command("ButtonClicked")]
+
         public async Task YourCommand()
         {
-            Console.WriteLine("xd");
+            Console.WriteLine("xd3");
         }
-        //todo
-        public async Task HandleButtonClick(SocketMessageComponent component)
+        public static async Task HandleButtonClick(SocketMessageComponent interaction)
         {
-            Console.WriteLine("xd2");
-
-            if (component.Data.CustomId == "button_guzik")
+            switch(interaction.Data.CustomId)
+            
             {
-                await ReplyAsync("<3");
+                case "Skip":
+                    SkipSong();
+                break;
+                case "Pause":
+                    PausePlaying();
+                    await Program.SendCurrentPlayingMessage(interaction.Message.Channel, interaction.Message.Content, true);
+                break;
+                case "Resume":
+                    ResumePlaying();
+                    await Program.SendCurrentPlayingMessage(interaction.Message.Channel, interaction.Message.Content, false);
+                break;
+                //case "Stop":
+                //    StopMusicThread();
+                //break;
+                case "List":
+                    //Modal 
+                  //  ModalBuilder modalBuilder = new ModalBuilder()
+                  //  .WithTitle("urls")
+                  //  .Components 
+
+                break;
+                case "Clear":
+                    queue.Clear();
+                break;
             }
         }
 
