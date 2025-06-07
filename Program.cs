@@ -32,6 +32,7 @@ namespace bot7
             CommandHandler _commandHandler = new CommandHandler(client, _commands);
             await _commandHandler.InstallCommandsAsync();
             var token = "";
+            token = Environment.GetEnvironmentVariable("DiscordToken");
             await client.LoginAsync(TokenType.Bot, token);
             client.Log += Client_Log;
             await client.StartAsync();
