@@ -11,6 +11,7 @@ using System.Globalization;
 using Whisper.net;
 using AngleSharp.Dom;
 using System.IO;
+using Swan.Threading;
 
 namespace bot7
 {
@@ -21,6 +22,7 @@ namespace bot7
         public static CancellationTokenSource _recordingCancellationTokenSource = new CancellationTokenSource();
         private readonly static string defaultSong = "https://www.youtube.com/watch?v=woNw5Dyqhzo";
 
+        LmStudioCaller lmStudioCaller = new();
         public static IAudioClient? audioClient;
         public static Thread? thread;
         public static Thread? recordingThread;
@@ -30,7 +32,7 @@ namespace bot7
         static SocketVoiceState? voiceState;
         static Semaphore PlaySemaphore = new(1, 1);
         static bool cutIn = false;
-
+        AtomicBoolean isPlayingMusic = new(false);
 
 
         internal async Task SongsThread()
@@ -224,7 +226,8 @@ namespace bot7
             }
             return false;
         }
-
+        [Command("join")]
+        [Alias("come", "chodź", "chodz")]
         private async Task<bool> JoinChannel()
         {
             if (Context.User is not SocketGuildUser guildUser)
@@ -392,7 +395,7 @@ namespace bot7
         }
 
         [Command("text")]
-        public async Task TextCommand()
+        public async Task TextCommand() 
         {
             var modelName = "ggml-medium.bin"; // Specify the model name you want to download
                                                //if (!File.Exists(modelName))
@@ -452,6 +455,14 @@ namespace bot7
             }
         }
 
+        [Command("say")]
+        [Alias("powiedzMiDaćme", "czemu")]
+        public async Task SayCommand([Remainder] string v)
+        {
+            var response = await lmStudioCaller.call(v);
+            await ReplyAsync(response);
+        }
+
         async void StopMusicThread()
         {
             try
@@ -488,16 +499,74 @@ namespace bot7
         }
         private static Process CreateStream((string, float) path)
         {
-#pragma warning disable CS8603 // Possible null reference return.
+            var ffmpegPath = @"C:\globals\ffmpeg-6.1.1-full_build\bin\ffmpeg.exe";
+
+            var pathWithPre = $@"C:\Users\Administrator\Source\Repos\bot7\bin\Debug\net7.0\{path.Item1}";
+            if (!File.Exists(pathWithPre))
+            {
+                Console.WriteLine("File not found: " + path);
+            }
             return Process.Start(new ProcessStartInfo
             {
-                FileName = "ffmpeg",
-                Arguments = $"-hide_banner -loglevel panic -i \"{path.Item1}\" -af \"volume={path.Item2.ToString("0.0")}\" -ac 2 -f s16le -ar 48000 pipe:1",
-                UseShellExecute = false,
+                FileName = ffmpegPath,
+                Arguments = $"-hide_banner -loglevel panic -i \"{pathWithPre}\" -ac 2 -f s16le -ar 48000 pipe:1",
                 RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
             });
-#pragma warning restore CS8603 // Possible null reference return.
         }
+
+
+        //private static Process CreateStream((string, float) path)
+        //{
+        //    try
+        //    {
+        //        var processStartInfo = new ProcessStartInfo
+        //        {
+        //            FileName = "ffmpeg",
+        //            Arguments = $"-hide_banner -loglevel panic -i \"{path.Item1}\" -af \"volume={path.Item2.ToString("0.0")}\" -ac 2 -f s16le -ar 48000 pipe:1",
+        //            UseShellExecute = false,
+        //            RedirectStandardOutput = true,
+        //            RedirectStandardError = true, // Redirect error output
+        //        };
+
+        //        var process = new Process
+        //        {
+        //            StartInfo = processStartInfo,
+        //            EnableRaisingEvents = true // Enable events
+        //        };
+
+        //        process.OutputDataReceived += (sender, e) =>
+        //        {
+        //            if (!string.IsNullOrEmpty(e.Data))
+        //            {
+        //                Console.WriteLine($"Output: {e.Data}");
+        //            }
+        //        };
+
+        //        process.ErrorDataReceived += (sender, e) =>
+        //        {
+        //            if (!string.IsNullOrEmpty(e.Data))
+        //            {
+        //                Console.WriteLine($"Error: {e.Data}");
+        //            }
+        //        };
+
+        //        process.Start();
+        //        process.BeginOutputReadLine(); // Start reading output
+        //        process.BeginErrorReadLine(); // Start reading errors
+
+        //        return process;
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        Console.WriteLine($"Error starting FFmpeg process: {ex.Message}");
+        //        return null; // Or handle as needed
+        //    }
+        //}
+
+
 
         private async static Task<string> CreateFileFromYt(string url, int iteration)
         {
@@ -577,9 +646,19 @@ namespace bot7
                             PlaySemaphore.WaitOne();
                             try
                             {
+                                //byte[] buffer = new byte[1024]; // Read a small buffer
+                                //int bytesRead = await output.ReadAsync(buffer, 0, buffer.Length);
+                                //if (bytesRead == 0)
+                                //{
+                                //    Console.WriteLine("The output stream is empty.");
+                                //    //return; 
+                                //}
+
                                 await output.CopyToAsync(discordstream, _cancellationTokenSource.Token);
                             }
-                            catch (Exception e) { }
+                            catch (Exception e) {
+                                Console.WriteLine($"Error Copying to the Discord Stream {e.Message}");
+                            }
                             finally
                             {
                                 PlaySemaphore.Release();
