@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+	<LangVersion>preview</LangVersion>
     <OutputType>Exe</OutputType>
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -8,6 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Concentus" Version="2.2.2" />
     <PackageReference Include="Discord.Addons.Music" Version="0.2.1" />
     <PackageReference Include="Discord.Net" Version="3.17.4" />
     <PackageReference Include="Google.Apis.YouTube.v3" Version="1.69.0.3764" />
