@@ -166,7 +166,7 @@ namespace bot7
         private static async Task Client_MessageReceived(SocketMessage arg)
         {
             var message = arg as SocketUserMessage;
-            if (message.Author.IsBot) return;
+            if (message.Author.IsBot) return;//crash on user that left// message can be null?
             if (message.Content == "!wyłącz mi komputer xd")
             {
                 //Process.Start("shutdown", "/s /t 5");

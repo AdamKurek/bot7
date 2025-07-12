@@ -28,7 +28,7 @@ namespace bot7
 
         public static CancellationTokenSource _cancellationTokenSource = new CancellationTokenSource();
         public static CancellationTokenSource _recordingCancellationTokenSource = new CancellationTokenSource();
-        private readonly static string defaultSong = "https://www.youtube.com/watch?v=woNw5Dyqhzo";
+        private readonly static string defaultSong = "autism.webm";
 
         LmStudioCaller lmStudioCaller = new();
         public static IAudioClient? audioClient;
@@ -118,14 +118,13 @@ namespace bot7
                         {
                             File.Delete(outputFile);
                         }
-                        using var whisperFactory = WhisperFactory.FromPath("Models/ggml-medium.bin");
+                        using var whisperFactory = WhisperFactory.FromPath("Models/ggml-tiny.bin");
 
                         using var processor = whisperFactory.CreateBuilder()
-                            .WithLanguage("pl")
                             .Build();
                         #endregion
 
-                        for (int i = 0; i <3; i++)
+                        for (int i = 0; i < 3; i++)
                         {
                             var filePath = $"outputAudioFile{user.GlobalName}{i++}.webm";
                             if (File.Exists(filePath))
@@ -134,7 +133,9 @@ namespace bot7
                             }
                             string ffmpegPath = @"C:\globals\ffmpeg-6.1.1-full_build\bin\ffmpeg.exe";
                             //string arguments = $"-y -f s16le -ar 48000 -ac 2 -i pipe:0 -c:a -ar 16000 pipe:1";
-                            string arguments = $"-y -f s16le -ar 48000 -ac 2 -i pipe:0 -f wav -c:a pcm_s16le -ar 16000 -ac 1 pipe:1";
+                            //string arguments = $"-y -f s16le -ar 48000 -ac 2 -i pipe:0 -f wav -c:a pcm_s16le -ar 16000 -ac 1 pipe:1";
+                            string arguments = "-y -f s16le -ar 48000 -ac 2 -i pipe:0 -ac 1 -ar 16000 -f f32le pipe:1";
+
 
                             using (Process ffmpegProcess = new Process())
                             {
@@ -149,13 +150,26 @@ namespace bot7
                                     CreateNoWindow = true,
                                 };
                                 ffmpegProcess.StartInfo = startInfo;
+
+
+                                _ = Task.Run(async () =>
+                                {
+                                    using var reader = ffmpegProcess.StandardError;
+                                    string? line;
+                                    while ((line = await reader.ReadLineAsync()) != null)
+                                    {
+                                        Console.WriteLine("[FFmpeg] " + line);
+                                    }
+                                });
+
+
                                 ffmpegProcess.Start();
                                 using (var audioStream = guilduser.AudioStream)
                                 {
 
                                     var stdin = ffmpegProcess.StandardInput.BaseStream;
                                     var stdout = ffmpegProcess.StandardOutput.BaseStream;
-
+                                    _recordingCancellationTokenSource = new();
                                     var cts = _recordingCancellationTokenSource.Token;
                                     var outputBuffer = new MemoryStream();
 
@@ -166,20 +180,19 @@ namespace bot7
                                             try
                                             {
                                                 var input = (await audioStream.ReadFrameAsync(cts)).Payload;
-                                                //if (input.Length == 0) break;
-
                                                 await stdin.WriteAsync(input, 0, input.Length, cts);
                                                 await stdin.FlushAsync(cts); // Optional depending on format
                                             }
                                             catch (OperationCanceledException)
                                             {
-                                                break; // Exit if cancellation is requested
+                                                break;
                                             }
                                         }
-                                        stdin.Close(); // Very important! Tells FFmpeg that input is done.
+                                        stdin.Close(); 
 
                                     });
-
+                                    float[] totalBuffer = new float[500000];
+                                    int totalBufferIterator = 0;
                                     var readTask = Task.Run(async () =>
                                     {
                                         var tempBuffer = new byte[4096];
@@ -188,50 +201,76 @@ namespace bot7
                                             try
                                             {
                                                 int bytesRead = await stdout.ReadAsync(tempBuffer, 0, tempBuffer.Length, cts);
-                                                //if (bytesRead == 0) break;
-                                                outputBuffer.Write(tempBuffer, 0, bytesRead);
+                                                if (bytesRead != 0) { 
+                                                    outputBuffer.Write(tempBuffer, 0, bytesRead);
+
+                                                    byte[] rawData = outputBuffer.ToArray();
+                                                    int sampleCount = rawData.Length / 4; // 4 bytes per float
+                                                    float[] samples = new float[sampleCount];
+
+                                                    //for (int i = 0; i < sampleCount; i++, totalBufferIterator++)
+                                                    //{
+                                                    //    totalBuffer[totalBufferIterator] = BitConverter.ToSingle(rawData, i * 4);
+                                                    //}
+
+                                                    int floatCount = bytesRead / 4;
+                                                    for (int i = 0; i < floatCount; i++, totalBufferIterator++)
+                                                    {
+                                                        float sample = BitConverter.ToSingle(tempBuffer, i * 4);
+                                                        totalBuffer[totalBufferIterator] = sample;
+                                                    }
+                                                    continue;
+                                                }
+                                                Console.WriteLine("0");
+
                                             }
                                             catch (OperationCanceledException)
                                             {
                                                 break; // Exit if cancellation is requested
                                             }
+                                            catch (Exception e)
+                                            {
+                                                Console.WriteLine("Error reading from FFmpeg output: " + e.Message);
+                                                break; // Exit on error
+                                            }
                                         }
                                     });
 
                                     await Task.WhenAll(writeTask, readTask);
-                                        ffmpegProcess.WaitForExit();
 
-
-                                     
-                                    string oup = $"output{user.GlobalName}.wav";
-                                    {
-                                        if (File.Exists(oup))
-                                        {
-                                            File.Delete(oup);
-                                        }
-                                        var bufer = outputBuffer.GetBuffer();
-                                        await File.WriteAllBytesAsync(oup, bufer); 
-                                    }
-                                    var bufer2 = outputBuffer.GetBuffer();
-
-                                    var floatBuffer = new float[bufer2.Length / sizeof(float)];
-                                    Buffer.BlockCopy(bufer2, 0, floatBuffer, 0, bufer2.Length);
-
-                                    //var parser = new WaveParser() // class used internally by Whisper.net to parse audio files, now do it manually
-
-                                    var bf = floatBuffer.ToArray();
-                                    using var fileStream = File.OpenRead(oup);
-                                    var fromFileBuffer = new float[fileStream.Length / sizeof(float)];
-                                    await foreach (var result in processor.ProcessAsync(floatBuffer))
+                                    await foreach (var result in processor.ProcessAsync(totalBuffer))
                                     {
                                         Console.WriteLine($"{result.Start}->{result.End}: {result.Text}");
                                         await ReplyAsync($"{result.Text}");
                                     }
-                                    await foreach (var result in processor.ProcessAsync(fileStream))
-                                    {
-                                        Console.WriteLine($"{result.Start}->{result.End}: {result.Text}");
-                                        await ReplyAsync($"{result.Text}");
-                                    }
+                                    //ffmpegProcess.WaitForExit();
+
+
+
+                                    //string oup = $"output{user.GlobalName}.wav";
+                                    //{
+                                    //    if (File.Exists(oup))
+                                    //    {
+                                    //        File.Delete(oup);
+                                    //    }
+                                    //    var bufer = outputBuffer.GetBuffer();
+                                    //    await File.WriteAllBytesAsync(oup, bufer); 
+                                    //}
+                                    //var bufer2 = outputBuffer.GetBuffer();
+
+                                    //var floatBuffer = new float[bufer2.Length / sizeof(float)];
+                                    //Buffer.BlockCopy(bufer2, 0, floatBuffer, 0, bufer2.Length);
+
+                                    //var parser = new WaveParser(outputBuffer); // class used internally by Whisper.net to parse audio files, now do it manually
+                                    //var bf = floatBuffer.ToArray();
+                                    //using var fileStream = File.OpenRead(oup);
+                                    //var fromFileBuffer = new float[fileStream.Length / sizeof(float)];
+                                    //await foreach (var result in processor.ProcessAsync(await parser.GetAvgSamplesAsync()))
+                                    //{
+                                    //    Console.WriteLine($"{result.Start}->{result.End}: {result.Text}");
+                                    //    await ReplyAsync($"{result.Text}");
+                                    //}
+
 
                                     return;
 
@@ -281,7 +320,7 @@ namespace bot7
 
         [Command("play")]
         [Alias("p")]
-        public async Task PlayCommand(string url = "https://www.youtube.com/watch?v=woNw5Dyqhzo")
+        public async Task PlayCommand(string url = "autism.webm")
         {
             _stop = false;
             if (!await JoinChannel())
@@ -306,7 +345,7 @@ namespace bot7
 
         [Command("playdefault")]
         [Alias("pd", "playanddefault")]
-        public async Task PlayDefaultCommand(string url = "https://www.youtube.com/watch?v=woNw5Dyqhzo")
+        public async Task PlayDefaultCommand(string url = "autism.webm")
         {
             await PlayCommand(url);
             await SetDefaultCommand(url);
@@ -320,7 +359,7 @@ namespace bot7
 
         [Command("enqueue")]
         [Alias("pushback", "enq", "q", "potem", "queue")]
-        public async Task QCommand(string url = "https://www.youtube.com/watch?v=woNw5Dyqhzo")
+        public async Task QCommand(string url = "autism.webm")
         {
             if(!await JoinChannel())
             {
@@ -375,7 +414,7 @@ namespace bot7
 
         [Command("quickplay")]
         [Alias("qp", "slide", "cutin")]
-        public async Task QuickplayCommand(string url = "https://www.youtube.com/watch?v=woNw5Dyqhzo")
+        public async Task QuickplayCommand(string url = "autism.webm")
         {
             _stop = false;
             if (!await JoinChannel())
@@ -410,7 +449,7 @@ namespace bot7
 
         [Command("set default")]
         [Alias("default", "d", "kółkuj", "loop")]
-        public async Task SetDefaultCommand(string url = "https://www.youtube.com/watch?v=woNw5Dyqhzo")
+        public async Task SetDefaultCommand(string url = "autism.webm")
         {
             queue.DefaultSong = (url, 0.5f);
         }
@@ -567,9 +606,8 @@ namespace bot7
             try
             {
                 var options = WhisperFactoryOptions.Default;
-                using var whisperFactory = WhisperFactory.FromPath("Models/ggml-medium.bin", options);
+                using var whisperFactory = WhisperFactory.FromPath("Models/ggml-tiny.bin", options);
                 using var processor = whisperFactory.CreateBuilder()
-                    .WithLanguage("pl")
                     .Build();
 
                 using var fileStream = File.OpenRead("outputFile.wav");
