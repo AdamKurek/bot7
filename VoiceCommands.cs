@@ -20,6 +20,7 @@ using System;
 using System.Linq;
 using static SpotifyAPI.Web.SearchRequest;
 using Whisper.net.Wave;
+using static System.Net.Mime.MediaTypeNames;
 
 namespace bot7
 {
@@ -118,7 +119,7 @@ namespace bot7
                         {
                             File.Delete(outputFile);
                         }
-                        using var whisperFactory = WhisperFactory.FromPath("Models/ggml-tiny.bin");
+                        using var whisperFactory = WhisperFactory.FromPath("Models/ggml-medium.bin");
 
                         using var processor = whisperFactory.CreateBuilder()
                             .Build();
@@ -240,8 +241,17 @@ namespace bot7
 
                                     await foreach (var result in processor.ProcessAsync(totalBuffer))
                                     {
+                                        if (result.Text == " [BLANK_AUDIO]" || result.Text == " [TEST]")//"[ Silence ]"
+                                        {
+                                            continue;
+                                        }
                                         Console.WriteLine($"{result.Start}->{result.End}: {result.Text}");
                                         await ReplyAsync($"{result.Text}");
+                                        var response = await lmStudioCaller.call(result.Text);
+                                        var processedResponse = response.Replace("</think>", "kurwa");
+                                        processedResponse = processedResponse.Replace("<think>", null);
+                                        Console.WriteLine(processedResponse);
+                                        await BotSpeak(processedResponse);
                                     }
                                     //ffmpegProcess.WaitForExit();
 
@@ -639,7 +649,7 @@ namespace bot7
 
             _recordingCancellationTokenSource.Cancel();
             _recordingCancellationTokenSource.Dispose();
-            _cancellationTokenSource = new CancellationTokenSource();
+            _recordingCancellationTokenSource = new CancellationTokenSource();
         }
 
         [Command("tt")]
@@ -821,7 +831,7 @@ namespace bot7
                 {
                     if (discordstream == null)
                     {
-                        int bitrate = 131_072; // XD
+                        int bitrate = 96000;//131_072; // XD
                         try
                         {
 
