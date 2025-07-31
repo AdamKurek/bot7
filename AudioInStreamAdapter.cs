@@ -13,10 +13,12 @@ namespace bot7
         private readonly AudioInStream _audioStream;
         private byte[] _buffer = Array.Empty<byte>();
         private int _bufferOffset = 0;
+        private readonly CancellationToken _sneakyCancelationToken;
 
-        public AudioInStreamAdapter(AudioInStream stream)
+        public AudioInStreamAdapter(AudioInStream stream, CancellationToken sneakyCancelationToken)
         {
             _audioStream = stream ?? throw new ArgumentNullException(nameof(stream));
+            _sneakyCancelationToken = sneakyCancelationToken;
         }
 
         public override bool CanRead => true;
@@ -33,13 +35,10 @@ namespace bot7
             {
                 if (_bufferOffset >= _buffer.Length)
                 {
-                    if (!_audioStream.TryReadFrame(CancellationToken.None, out var frame))
-                        break;
-
+                    var frame = _audioStream.ReadFrameAsync(_sneakyCancelationToken).Result;
                     _buffer = frame.Payload;
                     _bufferOffset = 0;
                 }
-
                 int bytesAvailable = _buffer.Length - _bufferOffset;
                 int bytesToCopy = Math.Min(count - totalRead, bytesAvailable);
                 Array.Copy(_buffer, _bufferOffset, buffer, offset + totalRead, bytesToCopy);

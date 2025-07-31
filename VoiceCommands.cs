@@ -136,7 +136,7 @@ namespace bot7
                             var inputFormat = new WaveFormat(48000, 16, 2);
                             var outputFormat = new WaveFormat(16000, 16, 1);
                             var token = _recordingCancellationTokenSource.Token;
-                            var audioWithReadMethod = new AudioInStreamAdapter(guilduser.AudioStream);
+                            var audioWithReadMethod = new AudioInStreamAdapter(guilduser.AudioStream, token);//TODO use token that is used by canceling stream?
                             var inputStream = new RawSourceWaveStream(audioWithReadMethod, inputFormat);
                             var monoProvider = new StereoToMonoProvider16(inputStream);
                             monoProvider.LeftVolume = 0.5f;
@@ -145,27 +145,18 @@ namespace bot7
                             {
                                 ResamplerQuality = 60 
                             };
-
-                                var tempBuffer = new byte[4096];
                                 try
                                 {
-                                    while (!token.IsCancellationRequested)
-                                    {
+                                    while (!token.IsCancellationRequested){
+                                        byte[] buffer = new byte[3200]; // gpt says 100ms of 16kHz mono 16-bit = 16000 * 0.1 * 2 = 3200 bytes
+                                        int bytesRead = resampler.Read(buffer, 0, buffer.Length);
 
-                                    byte[] buffer = new byte[3200]; // gpt says 100ms of 16kHz mono 16-bit = 16000 * 0.1 * 2 = 3200 bytes
-                                    int bytesRead = resampler.Read(buffer, 0, buffer.Length);
-
-                                    if (bytesRead <= 0)
-                                        {
-                                            //Console.WriteLine("[ReadTask] No more data");
+                                        if (bytesRead <= 0)  {
+                                            Console.WriteLine("[ReadTask] No more data");
                                         }
-
-                                        if (rec.AcceptWaveform(buffer, bytesRead))
-                                        {
+                                        if (rec.AcceptWaveform(buffer, bytesRead)){
                                             Console.WriteLine(rec.Result());
-                                        }
-                                        else
-                                        {
+                                        }else{
                                             Console.WriteLine(rec.PartialResult());
                                         }
                                     }
