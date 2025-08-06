@@ -13,12 +13,22 @@ namespace bot7
         private readonly AudioInStream _audioStream;
         private byte[] _buffer = Array.Empty<byte>();
         private int _bufferOffset = 0;
-        private readonly CancellationToken _sneakyCancelationToken;
+        private CancellationTokenSource _outerCancelationTokenSource;
+        private readonly int _timerTimeout;
 
-        public AudioInStreamAdapter(AudioInStream stream, CancellationToken sneakyCancelationToken)
+        public AudioInStreamAdapter(AudioInStream stream, CancellationTokenSource sneakyCancelationToken, int autoCancel = 300)
         {
             _audioStream = stream ?? throw new ArgumentNullException(nameof(stream));
-            _sneakyCancelationToken = sneakyCancelationToken;
+            _outerCancelationTokenSource = sneakyCancelationToken;
+            _timerTimeout = autoCancel;
+        }
+
+
+        //TODO this method should never be created, but you somehow must return and vosk wrapper blocks you from that
+        public CancellationToken CreateNewToken()
+        {
+            _outerCancelationTokenSource = new CancellationTokenSource();
+            return _outerCancelationTokenSource.Token;
         }
 
         public override bool CanRead => true;
@@ -29,21 +39,47 @@ namespace bot7
 
         public override int Read(byte[] buffer, int offset, int count)
         {
-            int totalRead = 0;
 
-            while (totalRead < count)
+            var cts = new CancellationTokenSource();
+            var token = cts.Token;
+
+            using var timer = new System.Timers.Timer() { AutoReset = false, };
+            timer.Interval = _timerTimeout;
+            timer.Elapsed += (o, s) => {
+                cts.Cancel();
+            };
+            timer.AutoReset = false;
+
+
+            int totalRead = 0;
+            try
             {
-                if (_bufferOffset >= _buffer.Length)
+                while (totalRead < count)
                 {
-                    var frame = _audioStream.ReadFrameAsync(_sneakyCancelationToken).Result;
-                    _buffer = frame.Payload;
-                    _bufferOffset = 0;
+                    if (_bufferOffset >= _buffer.Length)
+                    {
+                        var frame = _audioStream.ReadFrameAsync(token).GetAwaiter().GetResult();
+                        _buffer = frame.Payload;
+                        _bufferOffset = 0;
+                        timer.Stop();
+                        timer.Start();
+                    }
+                    int bytesAvailable = _buffer.Length - _bufferOffset;
+                    int bytesToCopy = Math.Min(count - totalRead, bytesAvailable);
+                    Array.Copy(_buffer, _bufferOffset, buffer, offset + totalRead, bytesToCopy);
+                    _bufferOffset += bytesToCopy;
+                    totalRead += bytesToCopy;
                 }
-                int bytesAvailable = _buffer.Length - _bufferOffset;
-                int bytesToCopy = Math.Min(count - totalRead, bytesAvailable);
-                Array.Copy(_buffer, _bufferOffset, buffer, offset + totalRead, bytesToCopy);
-                _bufferOffset += bytesToCopy;
-                totalRead += bytesToCopy;
+            }
+            catch (OperationCanceledException)
+            {
+                _outerCancelationTokenSource.Cancel();
+                return 0;
+            }
+            finally
+            {
+                timer.Dispose();
+                cts.Dispose();
             }
 
             return totalRead;

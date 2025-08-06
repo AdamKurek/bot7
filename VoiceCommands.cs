@@ -93,6 +93,8 @@ namespace bot7
 
         private async Task ListenToAudioStream(IVoiceChannel channel)
         {
+            var model = new Model("Models/vosk-model-small-pl-0.22"); // e.g. "models/vosk-model-small-pl-0.22"
+            Vosk.Vosk.SetLogLevel(0);
             List<Thread> listeningThreads = new List<Thread>();
             var users = channel.GetUsersAsync();
             await foreach (var userCollection in channel.GetUsersAsync())
@@ -105,73 +107,74 @@ namespace bot7
                     }
                     listeningThreads.Add(new Thread(async () =>
                     {
-
-                        #region whisperInit
-                        var modelName = "ggml-medium.bin"; // Specify the model name you want to download
-                                                           //if (!File.Exists(modelName))
-                                                           //{
-                                                           //    using var modelStream = await WhisperGgmlDownloader.GetGgmlModelAsync(GgmlType.Base); // Adjust GgmlType.Base to the type of model you need
-                                                           //    using var fileWriter = File.OpenWrite(modelName);
-                                                           //    await modelStream.CopyToAsync(fileWriter);
-                                                           //}
-                        string inputFile = "outputAudioFilekaczek0.webm"; // Path to the recorded WebM file
-                        string outputFile = "outputFile.wav"; // Desired output .wav file
-                        if (File.Exists(outputFile))
-                        {
-                            File.Delete(outputFile);
-                        }
-                        Vosk.Vosk.SetLogLevel(0);
-                        var model = new Model("Models/vosk-model-small-pl-0.22"); // e.g. "models/vosk-model-small-pl-0.22"
+                        string grammarJson = "[\"daćme\", \"dis\", \"robul\", \"robula\"]";
                         var rec = new VoskRecognizer(model, 16000.0f);
-
-                        #endregion
-
-                        for (int i = 0; i < 1; i++)
+                        
+                        var inputFormat = new WaveFormat(48000, 16, 2);
+                        var outputFormat = new WaveFormat(16000, 16, 1);
+                        _recordingCancellationTokenSource = new();
+                        var tokenSource = new CancellationTokenSource();
+                        var audioWithReadMethod = new AudioInStreamAdapter(guilduser.AudioStream, tokenSource);//TODO use token that is used by canceling stream?
+                        var inputStream = new RawSourceWaveStream(audioWithReadMethod, inputFormat);
+                        var monoProvider = new StereoToMonoProvider16(inputStream);
+                        monoProvider.LeftVolume = 0.5f;
+                        monoProvider.RightVolume = 0.5f;
+                        var resampler = new MediaFoundationResampler(monoProvider, outputFormat)
                         {
-                            var filePath = $"outputAudioFile{user.GlobalName}{i++}.webm";
-                            if (File.Exists(filePath))
-                            {
-                                File.Delete(filePath);
-                            }
-                            var inputFormat = new WaveFormat(48000, 16, 2);
-                            var outputFormat = new WaveFormat(16000, 16, 1);
-                            var token = _recordingCancellationTokenSource.Token;
-                            var audioWithReadMethod = new AudioInStreamAdapter(guilduser.AudioStream, token);//TODO use token that is used by canceling stream?
-                            var inputStream = new RawSourceWaveStream(audioWithReadMethod, inputFormat);
-                            var monoProvider = new StereoToMonoProvider16(inputStream);
-                            monoProvider.LeftVolume = 0.5f;
-                            monoProvider.RightVolume = 0.5f;
-                            var resampler = new MediaFoundationResampler(monoProvider, outputFormat)
-                            {
-                                ResamplerQuality = 60 
-                            };
-                                try
-                                {
-                                    while (!token.IsCancellationRequested){
-                                        byte[] buffer = new byte[3200]; // gpt says 100ms of 16kHz mono 16-bit = 16000 * 0.1 * 2 = 3200 bytes
-                                        int bytesRead = resampler.Read(buffer, 0, buffer.Length);
-
-                                        if (bytesRead <= 0)  {
-                                            Console.WriteLine("[ReadTask] No more data");
-                                        }
-                                        if (rec.AcceptWaveform(buffer, bytesRead)){
-                                            Console.WriteLine(rec.Result());
-                                        }else{
-                                            Console.WriteLine(rec.PartialResult());
-                                        }
+                            ResamplerQuality = 60 
+                        };
+                        string sentence = "";
+                        try{
+                            while (true){
+                                var gotToken = audioWithReadMethod.CreateNewToken(); 
+                                byte[] buffer = new byte[3200]; // gpt says 100ms of 16kHz mono 16-bit = 16000 * 0.1 * 2 = 3200 bytes
+                                resampler.Read(buffer, 0, buffer.Length);//always reads 3200???
+                                if (gotToken.IsCancellationRequested)  {
+                                    sentence += VoiceRecognition.ExtractText(rec.FinalResult());
+                                    //await BotSpeak(sentence);
+                                    if (sentence.Length > 0)
+                                    {
+                                        var response = await lmStudioCaller.call(sentence);
+                                        
+                                        Console.WriteLine(sentence);
+                                        BotSpeak(response);
+                                        Console.WriteLine(response);
+                                    }
+                                    sentence = "";
+                                    gotToken = audioWithReadMethod.CreateNewToken();
+                                    if (!gotToken.IsCancellationRequested) // Reset the token if it was cancelled
+                                    {
+                                        Console.WriteLine("Resetting token");
+                                    }
+                                    else
+                                    {
+                                        Console.WriteLine("Failed to reset token");
                                     }
                                 }
-                                catch (OperationCanceledException)
-                                {
-                                    Console.WriteLine("[ReadTask] Cancelled");
+                                if (rec.AcceptWaveform(buffer, 3200)){
+                                    var result = VoiceRecognition.ExtractText(rec.Result());
+                                    Console.WriteLine(result);
+                                    sentence += result;
                                 }
-                                catch (Exception e)
-                                {
-                                    Console.WriteLine("[ReadTask] Error: " + e.Message);
+                                else{
+                                    Console.WriteLine(VoiceRecognition.ExtractPartialText(rec.PartialResult()));
                                 }
-                            return;
+
+                                
                             }
-                    }));
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            Console.WriteLine("[ReadTask] Cancelled");
+                        }
+                        catch (Exception e)
+                        {
+                            Console.WriteLine("[ReadTask] Error: " + e.Message);
+                        }
+                      
+                        return;
+                        }
+                    ));
                 }
                 foreach (var thread in listeningThreads)
                 {
@@ -511,9 +514,9 @@ namespace bot7
             thread = null;
         }
 
-        public static async Task BotSpeak(string text)
+        public static Task BotSpeak(string text)
         {
-            BudgetQuickplayCommand((await CreateFileText(text, 0), 0.5f));
+            BudgetQuickplayCommand((CreateFileText(text, 0), 0.5f));
         }
 
         public static void BudgetQuickplayCommand(InQueueSong path)
@@ -629,13 +632,15 @@ namespace bot7
             }
         }
 
-        private async static Task<string> CreateFileText(string Text, int iteration)
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Interoperability", "CA1416:Validate platform compatibility", Justification = "<Pending>")]
+        private static string CreateFileText(string Text, int iteration)
         {
             try
             {
                 SpeechSynthesizer synthesizer = new SpeechSynthesizer();
                 string file = $"output{iteration}.wav";
                 synthesizer.SetOutputToWaveFile(file);
+                synthesizer.SelectVoice("Microsoft Paulina Online (Natural) - Polish (Polski)");
                 foreach (InstalledVoice voice in synthesizer.GetInstalledVoices())
                 {
                     VoiceInfo voiceInfo = voice.VoiceInfo;
