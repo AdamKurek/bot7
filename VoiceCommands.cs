@@ -549,7 +549,8 @@ namespace bot7
             PlaySemaphore.WaitOne();
             try
             {
-                await WriteStreamToDiscord(ms, format.SamplesPerSecond, 1, CancellationToken.None);
+                await WriteStreamToDiscord(ms, discordstream!, format.SamplesPerSecond, 1, CancellationToken.None);
+                await discordstream!.FlushAsync();
             }
             finally
             {
@@ -672,14 +673,14 @@ namespace bot7
 
         static AudioOutStream? discordstream = null;
 
-        private static async Task WriteStreamToDiscord(Stream source, int sourceSampleRate, int sourceChannels, CancellationToken cancellationToken)
+        private static async Task WriteStreamToDiscord(Stream source, AudioOutStream destination, int sourceSampleRate, int sourceChannels, CancellationToken cancellationToken)
         {
             var targetFormat = new WaveFormat(48000, 16, 2);
 
             // If the source is already in Discord's expected format, copy directly for efficiency
             if (sourceSampleRate == targetFormat.SampleRate && sourceChannels == targetFormat.Channels)
             {
-                await source.CopyToAsync(discordstream, cancellationToken);
+                await source.CopyToAsync(destination, cancellationToken);
                 return;
             }
 
@@ -695,7 +696,7 @@ namespace bot7
             int read;
             while ((read = resampler.Read(buffer, 0, buffer.Length)) > 0)
             {
-                await discordstream.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
+                await destination.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
             }
         }
 
@@ -754,7 +755,7 @@ namespace bot7
                                 //    //return; 
                                 //}
 
-                                await WriteStreamToDiscord(output, 48000, 2, _cancellationTokenSource.Token);
+                                await WriteStreamToDiscord(output, discordstream!, 48000, 2, _cancellationTokenSource.Token);
                             }
                             catch (Exception e) {
                                 Console.WriteLine($"Error Copying to the Discord Stream {e.Message}");
