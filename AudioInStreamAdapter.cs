@@ -43,12 +43,6 @@ namespace bot7
             var cts = new CancellationTokenSource();
             var token = cts.Token;
 
-            using var timer = new System.Timers.Timer() { AutoReset = false, };
-            timer.Interval = _timerTimeout;
-            timer.Elapsed += (o, s) => {
-                cts.Cancel();
-            };
-            timer.AutoReset = false;
 
 
             int totalRead = 0;
@@ -61,8 +55,7 @@ namespace bot7
                         var frame = _audioStream.ReadFrameAsync(token).GetAwaiter().GetResult();
                         _buffer = frame.Payload;
                         _bufferOffset = 0;
-                        timer.Stop();
-                        timer.Start();
+                        cts.CancelAfter(_timerTimeout);
                     }
                     int bytesAvailable = _buffer.Length - _bufferOffset;
                     int bytesToCopy = Math.Min(count - totalRead, bytesAvailable);
@@ -78,7 +71,6 @@ namespace bot7
             }
             finally
             {
-                timer.Dispose();
                 cts.Dispose();
             }
 
