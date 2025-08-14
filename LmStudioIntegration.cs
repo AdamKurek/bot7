@@ -51,6 +51,10 @@ namespace bot7
                 HttpResponseMessage response = await client.PostAsync("http://192.168.0.21:1234/v1/chat/completions", content);
                 var bytes = await response.Content.ReadAsStringAsync();
                 var rsp = JsonConvert.DeserializeObject<ChatCompletionResponse>(bytes);
+                if(rsp.Choices == null)
+                {
+                    return "chyba zapomniałeś włączyć el em studio.";
+                }
                 var llmAnswer = rsp.Choices[0].Message;
                 if(llmAnswer is object)
                 {

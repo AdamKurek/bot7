@@ -1,27 +1,32 @@
-﻿using Discord.Commands;
-using Discord;
-using Discord.WebSocket;
-using Discord.Audio;
-using System.Diagnostics;
-using YoutubeExplode;
-using YoutubeExplode.Videos.Streams;
-using YoutubeExplode.Playlists;
-using System.Speech.Synthesis;
-using System.Globalization;
-using AngleSharp.Dom;
-using System.IO;
-using Swan.Threading;
-using System.Runtime.CompilerServices;
-using System.Threading;
-using Swan;
+﻿using AngleSharp.Dom;
 using Concentus;
-using System;
-using System.Linq;
-using static SpotifyAPI.Web.SearchRequest;
-using static System.Net.Mime.MediaTypeNames;
-using Vosk;
+using Discord;
+using Discord.Audio;
+using Discord.Commands;
+using Discord.WebSocket;
+using LMStudioNET.Objects.Models;
 using Microsoft.VisualBasic;
 using NAudio.Wave;
+using SmartAiCompendium.Common.Python;
+using SmartAICompendium.AudioGeneration.Inferences;
+using Swan;
+using Swan.Parsers;
+using Swan.Threading;
+using System;
+using System.Diagnostics;
+using System.Globalization;
+using System.IO;
+using System.Linq;
+using System.Runtime.CompilerServices;
+using System.Speech.Synthesis;
+using System.Text;
+using System.Threading;
+using Vosk;
+using YoutubeExplode;
+using YoutubeExplode.Playlists;
+using YoutubeExplode.Videos.Streams;
+using static SpotifyAPI.Web.SearchRequest;
+using static System.Net.Mime.MediaTypeNames;
 
 namespace bot7
 {
@@ -31,7 +36,7 @@ namespace bot7
         public static CancellationTokenSource _cancellationTokenSource = new CancellationTokenSource();
         public static CancellationTokenSource _recordingCancellationTokenSource = new CancellationTokenSource();
         private readonly static string defaultSong = "autism.webm";
-
+        static PiperIntegration piperCaller = new();
         LmStudioCaller lmStudioCaller = new();
         public static IAudioClient? audioClient;
         public static Thread? thread;
@@ -64,7 +69,9 @@ namespace bot7
                     var currUrl = queue.Dequeue();
                     //await ReplyAsync("playing " + currUrl.Url);
                     await Program.SendCurrentPlayingMessage(Context.Channel, $"Playing {currUrl.Url}");
-                    await SendAsyncYT(audioClient, currUrl);
+                    using (var process = await fileToProcess(currUrl)) { 
+                        await PlaySoundFromProcess(process);
+                    }
                     if (token.IsCancellationRequested)
                     {
                         return;
@@ -93,7 +100,7 @@ namespace bot7
 
         private async Task ListenToAudioStream(IVoiceChannel channel)
         {
-            var model = new Model("Models/vosk-model-small-pl-0.22"); // e.g. "models/vosk-model-small-pl-0.22"
+            var model = new Vosk.Model("Models/vosk-model-small-pl-0.22"); // e.g. "models/vosk-model-small-pl-0.22"
             Vosk.Vosk.SetLogLevel(0);
             List<Thread> listeningThreads = new List<Thread>();
             var users = channel.GetUsersAsync();
@@ -142,7 +149,7 @@ namespace bot7
                                     }
                                     sentence = "";
                                     gotToken = audioWithReadMethod.CreateNewToken();
-                                    if (!gotToken.IsCancellationRequested) // Reset the token if it was cancelled
+                                    if (!gotToken.IsCancellationRequested) 
                                     {
                                         Console.WriteLine("Resetting token");
                                     }
@@ -514,9 +521,12 @@ namespace bot7
             thread = null;
         }
 
-        public static Task BotSpeak(string text)
+        public void BotSpeak(string text)
         {
-            BudgetQuickplayCommand((CreateFileText(text, 0), 0.5f));
+            piperCaller.TextToStream(text, "piper.exe", "gosia.onnx");
+            RunOrContinueSongsThread();
+            cutIn = true;
+            _cancellationTokenSource.Cancel();
         }
 
         public static void BudgetQuickplayCommand(InQueueSong path)
@@ -612,12 +622,8 @@ namespace bot7
             try
             {
                 string file = $"audio{iteration}.webm";
-                //return file;
-                //return "";
                 var streamManifest = await youtube.Videos.Streams.GetManifestAsync(url);
-                
                 var streamInfo = streamManifest.GetAudioOnlyStreams().TryGetWithHighestBitrate();
-                
                 if (streamInfo != null)
                 {
                     await youtube.Videos.Streams.DownloadAsync(streamInfo, file);
@@ -627,46 +633,33 @@ namespace bot7
             catch (Exception e)
             {
                 Console.WriteLine("CreatingFileError: " + e.ToString());
-                 Thread.Sleep(1000000);
                 return "";
             }
         }
 
+
+
+
+
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Interoperability", "CA1416:Validate platform compatibility", Justification = "<Pending>")]
-        private static string CreateFileText(string Text, int iteration)
+        private static string TextToAudioFile(string Text, int iteration)
         {
-            try
-            {
-                SpeechSynthesizer synthesizer = new SpeechSynthesizer();
-                string file = $"output{iteration}.wav";
-                synthesizer.SetOutputToWaveFile(file);
-                synthesizer.SelectVoice("Microsoft Paulina Online (Natural) - Polish (Polski)");
-                foreach (InstalledVoice voice in synthesizer.GetInstalledVoices())
-                {
-                    VoiceInfo voiceInfo = voice.VoiceInfo;
-                    if (voiceInfo.Culture.Equals(new CultureInfo("pl-PL")))
-                    {
-                        synthesizer.SelectVoice(voiceInfo.Name);
-                        break;
-                    }
-                }
-                synthesizer.Speak(Text);
-                synthesizer.SetOutputToDefaultAudioDevice();
-                return file;
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine(e.ToString());
-                return "failed creating file";
-            }
+            string file = $"output{iteration}.wav";
+
+            return PiperIntegration.TextToWav(Text, "piper.exe", "gosia.onnx", file);
         }
 
         static AudioOutStream? discordstream = null;
-        public static async Task SendAsyncYT(IAudioClient client, InQueueSong path, int depth = 0)
+
+        static async Task<Process> fileToProcess(InQueueSong path, int depth = 0)
+        {
+            return CreateStream(IsFromYoutube(path.Url) ? (await CreateFileFromYt(path.Url, depth), path.Volume) : path)!;
+        }
+
+        public async Task PlaySoundFromProcess(Process currentProcess, int depth = 0)
         {
             try
             {
-                using var currentProcess = CreateStream(IsFromYoutube(path.Url) ? (await CreateFileFromYt(path.Url, depth), path.Volume) : path);
                 if(currentProcess == null)
                 {
                     //PlaySemaphore.WaitOne();
@@ -679,8 +672,7 @@ namespace bot7
                         int bitrate = 131_072;//131_072; // XD
                         try
                         {
-
-                            discordstream = client.CreatePCMStream(AudioApplication.Music, bitrate);
+                            discordstream = audioClient.CreatePCMStream(AudioApplication.Music, bitrate);
                         }
                         catch
                         {
@@ -698,7 +690,30 @@ namespace bot7
                             if (cutIn)
                             {
                                 cutIn = false;
-                                await SendAsyncYT(client, queue.Dequeue(), depth + 1);
+                                var speach = piperCaller.ReadySpeach;
+                                if (speach is object)
+                                {
+                                    //await speach.StandardOutput.BaseStream.CopyToAsync(discordstream);
+                                    int modelHz = piperCaller.modelHz;
+                                    var srcFormat = new WaveFormat(modelHz, 16, 1);           
+                                    var targetFormat = new WaveFormat(48000, 16, 2);
+
+                                    using var raw = new RawSourceWaveStream(speach.StandardOutput.BaseStream, srcFormat);
+                                    using var resampler = new MediaFoundationResampler(raw, targetFormat)
+                                    { ResamplerQuality = 60 };
+
+                                    byte[] buf = new byte[targetFormat.AverageBytesPerSecond / 50]; // ~20 ms @ 48k stereo 16-bit (3840 bytes)
+                                    int n;
+                                    while ((n = resampler.Read(buf, 0, buf.Length)) > 0) { 
+                                        await discordstream.WriteAsync(buf.AsMemory(0, n), CancellationToken.None);
+                                    }
+
+                                }
+                                else
+                                {
+                                    var process = await fileToProcess(queue.Dequeue(), depth + 1);
+                                    await PlaySoundFromProcess(process, depth + 1);
+                                }
                             }
                             ResetToken();
                             if (_stop)
@@ -709,14 +724,6 @@ namespace bot7
                             PlaySemaphore.WaitOne();
                             try
                             {
-                                //byte[] buffer = new byte[1024]; // Read a small buffer
-                                //int bytesRead = await output.ReadAsync(buffer, 0, buffer.Length);
-                                //if (bytesRead == 0)
-                                //{
-                                //    Console.WriteLine("The output stream is empty.");
-                                //    //return; 
-                                //}
-
                                 await output.CopyToAsync(discordstream, _cancellationTokenSource.Token);
                             }
                             catch (Exception e) {

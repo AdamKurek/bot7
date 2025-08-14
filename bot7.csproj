@@ -16,6 +16,7 @@
     <PackageReference Include="LMStudioNET" Version="1.0.1" />
     <PackageReference Include="NAudio" Version="2.2.1" />
     <PackageReference Include="Opus" Version="1.0.0" />
+    <PackageReference Include="SmartAICompendium.AudioGeneration" Version="1.1.0" />
     <PackageReference Include="SpotifyAPI.Web" Version="7.2.1" />
     <PackageReference Include="SpotifyAPI.Web.Auth" Version="7.2.1" />
     <PackageReference Include="System.Speech" Version="9.0.5" />

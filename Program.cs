@@ -53,7 +53,7 @@ namespace bot7
                     var mess = Console.ReadLine();
                     if (mess != null)
                     {
-                        await VoiceCommands.BotSpeak(mess);
+                        //VoiceCommands.BotSpeakAsync(mess);
                     }
                 }
             }
