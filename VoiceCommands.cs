@@ -7,6 +7,7 @@ using YoutubeExplode;
 using YoutubeExplode.Videos.Streams;
 using YoutubeExplode.Playlists;
 using System.Speech.Synthesis;
+using System.Speech.AudioFormat;
 using System.Globalization;
 using AngleSharp.Dom;
 using System.IO;
@@ -513,7 +514,47 @@ namespace bot7
 
         public static async Task BotSpeak(string text)
         {
-            BudgetQuickplayCommand((await CreateFileText(text, 0), 0.5f));
+            if (voiceState?.VoiceChannel == null)
+            {
+                return;
+            }
+
+            if (audioClient == null)
+            {
+                audioClient = await voiceState.Value.VoiceChannel.ConnectAsync(false, false, false, false);
+            }
+
+            if (discordstream == null)
+            {
+                int bitrate = 131_072;
+                discordstream = audioClient.CreatePCMStream(AudioApplication.Music, bitrate);
+            }
+
+            using var synthesizer = new SpeechSynthesizer();
+            using var ms = new MemoryStream();
+            var format = new SpeechAudioFormatInfo(16000, AudioBitsPerSample.Sixteen, AudioChannel.Mono);
+            synthesizer.SetOutputToAudioStream(ms, format);
+            foreach (InstalledVoice voice in synthesizer.GetInstalledVoices())
+            {
+                VoiceInfo voiceInfo = voice.VoiceInfo;
+                if (voiceInfo.Culture.Equals(new CultureInfo("pl-PL")))
+                {
+                    synthesizer.SelectVoice(voiceInfo.Name);
+                    break;
+                }
+            }
+            synthesizer.Speak(text);
+            ms.Position = 0;
+
+            PlaySemaphore.WaitOne();
+            try
+            {
+                await WriteStreamToDiscord(ms, format.SamplesPerSecond, 1, CancellationToken.None);
+            }
+            finally
+            {
+                PlaySemaphore.Release();
+            }
         }
 
         public static void BudgetQuickplayCommand(InQueueSong path)
@@ -629,34 +670,35 @@ namespace bot7
             }
         }
 
-        private async static Task<string> CreateFileText(string Text, int iteration)
+        static AudioOutStream? discordstream = null;
+
+        private static async Task WriteStreamToDiscord(Stream source, int sourceSampleRate, int sourceChannels, CancellationToken cancellationToken)
         {
-            try
+            var targetFormat = new WaveFormat(48000, 16, 2);
+
+            // If the source is already in Discord's expected format, copy directly for efficiency
+            if (sourceSampleRate == targetFormat.SampleRate && sourceChannels == targetFormat.Channels)
             {
-                SpeechSynthesizer synthesizer = new SpeechSynthesizer();
-                string file = $"output{iteration}.wav";
-                synthesizer.SetOutputToWaveFile(file);
-                foreach (InstalledVoice voice in synthesizer.GetInstalledVoices())
-                {
-                    VoiceInfo voiceInfo = voice.VoiceInfo;
-                    if (voiceInfo.Culture.Equals(new CultureInfo("pl-PL")))
-                    {
-                        synthesizer.SelectVoice(voiceInfo.Name);
-                        break;
-                    }
-                }
-                synthesizer.Speak(Text);
-                synthesizer.SetOutputToDefaultAudioDevice();
-                return file;
+                await source.CopyToAsync(discordstream, cancellationToken);
+                return;
             }
-            catch (Exception e)
+
+            var srcFormat = new WaveFormat(sourceSampleRate, 16, sourceChannels);
+
+            using var raw = new RawSourceWaveStream(source, srcFormat);
+            using var resampler = new MediaFoundationResampler(raw, targetFormat)
             {
-                Console.WriteLine(e.ToString());
-                return "failed creating file";
+                ResamplerQuality = 60
+            };
+
+            byte[] buffer = new byte[targetFormat.AverageBytesPerSecond / 50];
+            int read;
+            while ((read = resampler.Read(buffer, 0, buffer.Length)) > 0)
+            {
+                await discordstream.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
             }
         }
 
-        static AudioOutStream? discordstream = null;
         public static async Task SendAsyncYT(IAudioClient client, InQueueSong path, int depth = 0)
         {
             try
@@ -712,7 +754,7 @@ namespace bot7
                                 //    //return; 
                                 //}
 
-                                await output.CopyToAsync(discordstream, _cancellationTokenSource.Token);
+                                await WriteStreamToDiscord(output, 48000, 2, _cancellationTokenSource.Token);
                             }
                             catch (Exception e) {
                                 Console.WriteLine($"Error Copying to the Discord Stream {e.Message}");
