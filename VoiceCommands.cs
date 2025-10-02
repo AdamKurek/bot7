@@ -14,17 +14,12 @@ using Swan.Parsers;
 using Swan.Threading;
 using System;
 using System.Diagnostics;
-using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Speech.Synthesis;
-using System.Text;
 using System.Threading;
 using Vosk;
-using YoutubeExplode;
-using YoutubeExplode.Playlists;
-using YoutubeExplode.Videos.Streams;
 using static SpotifyAPI.Web.SearchRequest;
 using static System.Net.Mime.MediaTypeNames;
 
@@ -42,12 +37,12 @@ namespace bot7
         public static Thread? thread;
         public static Thread? recordingThread;
         public static bool _stop = false;
-        private static YoutubeClient youtube = new YoutubeClient();
         static SongsQueuee<InQueueSong> queue = new((defaultSong, 0.5f));
         static SocketVoiceState? voiceState;
         static Semaphore PlaySemaphore = new(1, 1);
         static bool cutIn = false;
         AtomicBoolean isPlayingMusic = new(false);
+
 
 
         internal async Task SongsThread()
@@ -253,17 +248,19 @@ namespace bot7
 
         private bool AddSongsFromPlaylistToQueue(string url, bool front = false)
         {
-            var urls = TryAsPlaylist(url);
-            if (urls.Count() > 0)
+            var urls = YoutubeIntegration.TryGetPlaylistItems(url, 0.5f).ToList();
+            if (urls.Count > 0)
             {
                 if (front)
                 {
                     queue.AppendFront(urls);
                     return true;
                 }
+
                 queue.AppendEnd(urls);
                 return true;
             }
+
             return false;
         }
 
@@ -309,8 +306,8 @@ namespace bot7
 
         private static void EnqueueFrontYtSongOrPlaylist(string url)
         {
-            var urls = TryAsPlaylist(url);
-            if (urls.Count() > 0)
+            var urls = YoutubeIntegration.TryGetPlaylistItems(url, 0.5f).ToList();
+            if (urls.Count > 0)
             {
                 queue.AppendFront(urls);
             }
@@ -617,29 +614,6 @@ namespace bot7
 
 
 
-        private async static Task<string> CreateFileFromYt(string url, int iteration)
-        {
-            try
-            {
-                string file = $"audio{iteration}.webm";
-                var streamManifest = await youtube.Videos.Streams.GetManifestAsync(url);
-                var streamInfo = streamManifest.GetAudioOnlyStreams().TryGetWithHighestBitrate();
-                if (streamInfo != null)
-                {
-                    await youtube.Videos.Streams.DownloadAsync(streamInfo, file);
-                }
-                return file;
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine("CreatingFileError: " + e.ToString());
-                return "";
-            }
-        }
-
-
-
-
 
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Interoperability", "CA1416:Validate platform compatibility", Justification = "<Pending>")]
         private static string TextToAudioFile(string Text, int iteration)
@@ -653,7 +627,10 @@ namespace bot7
 
         static async Task<Process> fileToProcess(InQueueSong path, int depth = 0)
         {
-            return CreateStream(IsFromYoutube(path.Url) ? (await CreateFileFromYt(path.Url, depth), path.Volume) : path)!;
+            return CreateStream(
+                YoutubeIntegration.IsYoutubeUrl(path.Url)
+                    ? (await YoutubeIntegration.DownloadAudioAsync(path.Url, depth), path.Volume)
+                    : path)!;
         }
 
         public async Task PlaySoundFromProcess(Process currentProcess, int depth = 0)
@@ -747,29 +724,6 @@ namespace bot7
             catch (Exception e)
             {
                 Console.WriteLine("flushbug: " + e.Message);
-            }
-        }
-
-        private static bool IsFromYoutube(string path)
-        {
-            return path.Substring(0, 5).ToLower() == "https";
-        }
-
-        public static IEnumerable<InQueueSong> TryAsPlaylist(string url)
-        {
-            IEnumerable<PlaylistVideo> vids = null;
-            try
-            {
-                vids = youtube.Playlists.GetVideosAsync(url).ToEnumerable();
-
-            }
-            catch (Exception e)
-            {
-                yield break;
-            }
-            foreach (var vid in vids)
-            {
-                yield return (vid.Url, 0.5f);
             }
         }
 
