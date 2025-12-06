@@ -28,6 +28,11 @@ namespace bot7
             };
 
             client = new DiscordSocketClient(config);
+            client.VoiceServerUpdated += v => { Console.WriteLine($"VSR endpoint={v.Endpoint}"); return Task.CompletedTask; };
+            client.UserVoiceStateUpdated += (u, b, a) => {
+                if (u.Id == client.CurrentUser.Id) Console.WriteLine($"Me: ");
+                return Task.CompletedTask;
+            };
             CommandService _commands = new CommandService();
             CommandHandler _commandHandler = new CommandHandler(client, _commands);
             await _commandHandler.InstallCommandsAsync();

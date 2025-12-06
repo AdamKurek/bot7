@@ -1,12 +1,6 @@
-using System;
-using System.Collections.Generic;
 using System.Globalization;
-using System.IO;
-using System.Linq;
 using System.Net;
-using System.Net.Http;
 using System.Text;
-using System.Threading.Tasks;
 using YoutubeExplode;
 using YoutubeExplode.Playlists;
 using YoutubeExplode.Videos.Streams;
@@ -81,7 +75,7 @@ namespace bot7
 
             try
             {
-                return Path.Combine(AppContext.BaseDirectory, "youtube_cookies.txt");
+                return @"C:\Users\Administrator\Documents\ytCookies.txt";
             }
             catch
             {
@@ -236,20 +230,28 @@ namespace bot7
                 }
             };
 
+            // Basic options
             process.StartInfo.ArgumentList.Add("--no-playlist");
             process.StartInfo.ArgumentList.Add("--extract-audio");
-            process.StartInfo.ArgumentList.Add("--audio-format");
-            process.StartInfo.ArgumentList.Add("webm");
             process.StartInfo.ArgumentList.Add("--audio-quality");
             process.StartInfo.ArgumentList.Add("0");
             process.StartInfo.ArgumentList.Add("--no-progress");
 
+            // IMPORTANT: realistic User-Agent (403 often goes away with this)
+            process.StartInfo.ArgumentList.Add("--user-agent");
+            process.StartInfo.ArgumentList.Add("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36");
+
+            // *** Use cookies from browser ***
+            // Replace this string with your actual browser:profileAfterCheckingWith `yt-dlp --cookies-from-browser help`
+            process.StartInfo.ArgumentList.Add("--cookies-from-browser");
+            process.StartInfo.ArgumentList.Add("firefox:rj5oahmo.default-release");
             if (!string.IsNullOrWhiteSpace(CookiesFilePath) && File.Exists(CookiesFilePath))
             {
                 process.StartInfo.ArgumentList.Add("--cookies");
                 process.StartInfo.ArgumentList.Add(CookiesFilePath);
             }
 
+            // Output
             process.StartInfo.ArgumentList.Add("-o");
             process.StartInfo.ArgumentList.Add(outputTemplate);
             process.StartInfo.ArgumentList.Add(url);
@@ -302,6 +304,7 @@ namespace bot7
                         !f.EndsWith(".description", StringComparison.OrdinalIgnoreCase))
                     .OrderByDescending(File.GetLastWriteTimeUtc)
                     .FirstOrDefault();
+
                 if (downloadedFile == null)
                 {
                     throw new FileNotFoundException("yt-dlp did not produce an output file.");
@@ -321,5 +324,6 @@ namespace bot7
                 }
             }
         }
+
     }
 }
