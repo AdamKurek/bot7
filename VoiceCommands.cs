@@ -51,7 +51,7 @@ namespace bot7
             {
                 if (audioClient == null)
                 {
-                    audioClient = await voiceState.Value.VoiceChannel.ConnectAsync(false, false, false, false);
+                    audioClient = await voiceState.Value.VoiceChannel.ConnectAsync(false, false, false, true);
                 }
                 ResetToken();
                 while (true)
@@ -646,10 +646,10 @@ namespace bot7
                 {
                     if (discordstream == null)
                     {
-                        int bitrate = 131_072;//131_072; // XD
+                        int bitrate = 128_000;//131_072; // XD
                         try
                         {
-                            discordstream = audioClient.CreatePCMStream(AudioApplication.Music, bitrate);
+                            discordstream = audioClient.CreatePCMStream(AudioApplication.Music,bitrate, 5000, 40);
                         }
                         catch
                         {

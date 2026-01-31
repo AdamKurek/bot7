@@ -10,7 +10,7 @@ namespace bot7
     public static class YoutubeIntegration
     {
         private static readonly string? CookiesFilePath = ResolveYoutubeCookiesPath();
-        private static readonly string YtDlpExecutable = Environment.GetEnvironmentVariable("YTDLP_PATH") ?? "yt-dlp";
+        private static readonly string YtDlpExecutable = Environment.GetEnvironmentVariable("YTDLP_PATH") ?? "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python310\\Scripts\\yt-dlp.exe";
         private static readonly YoutubeClient Youtube = CreateYoutubeClient();
 
         public static bool IsYoutubeUrl(string url)
@@ -28,7 +28,7 @@ namespace bot7
             IEnumerable<PlaylistVideo> videos;
             try
             {
-                videos = Youtube.Playlists.GetVideosAsync(url).ToEnumerable();
+                videos = Youtube.Playlists.GetVideosAsync(url).ToArrayAsync().GetAwaiter().GetResult();
             }
             catch
             {
@@ -67,6 +67,7 @@ namespace bot7
 
         private static string? ResolveYoutubeCookiesPath()
         {
+            return @"./cookies.txt";
             var envPath = Environment.GetEnvironmentVariable("YOUTUBE_COOKIES_PATH");
             if (!string.IsNullOrWhiteSpace(envPath))
             {

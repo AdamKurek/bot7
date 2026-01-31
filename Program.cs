@@ -24,10 +24,13 @@ namespace bot7
             }
             var config = new DiscordSocketConfig()
             {
-                GatewayIntents = GatewayIntents.All
+                GatewayIntents = GatewayIntents.Guilds |
+        GatewayIntents.GuildVoiceStates |
+        GatewayIntents.GuildMessages|GatewayIntents.GuildMessages |GatewayIntents.Guilds | GatewayIntents.GuildVoiceStates | GatewayIntents.GuildMessages |GatewayIntents.MessageContent
             };
 
             client = new DiscordSocketClient(config);
+            client.Log += m => { Console.WriteLine(m); return Task.CompletedTask; };
             client.VoiceServerUpdated += v => { Console.WriteLine($"VSR endpoint={v.Endpoint}"); return Task.CompletedTask; };
             client.UserVoiceStateUpdated += (u, b, a) => {
                 if (u.Id == client.CurrentUser.Id) Console.WriteLine($"Me: ");
