@@ -47,6 +47,7 @@ namespace bot7
 
         internal async Task SongsThread()
         {
+            //Process.GetCurrentProcess().PriorityClass = ProcessPriorityClass.AboveNormal;
             try
             {
                 if (audioClient == null)
@@ -644,22 +645,7 @@ namespace bot7
                 }
                 using (var output = currentProcess.StandardOutput.BaseStream)
                 {
-                    if (discordstream == null)
-                    {
-                        int bitrate = 128_000;//131_072; // XD
-                        try
-                        {
-                            discordstream = audioClient.CreatePCMStream(AudioApplication.Music,bitrate, 5000, 40);
-                        }
-                        catch
-                        {
-                            Console.WriteLine($"Error creating PCM stream, trying with bitrate {bitrate}");
-                            bitrate--;
-                        }
-                        Console.BackgroundColor = ConsoleColor.Magenta;
-                        Console.WriteLine($"bitrate {bitrate}");
-
-                    }
+                    EnsureDiscordStream();
                     try
                     {
                         do
@@ -672,7 +658,7 @@ namespace bot7
                                 {
                                     //await speach.StandardOutput.BaseStream.CopyToAsync(discordstream);
                                     int modelHz = piperCaller.modelHz;
-                                    var srcFormat = new WaveFormat(modelHz, 16, 1);           
+                                    var srcFormat = new WaveFormat(modelHz, 16, 1);
                                     var targetFormat = new WaveFormat(48000, 16, 2);
 
                                     using var raw = new RawSourceWaveStream(speach.StandardOutput.BaseStream, srcFormat);
@@ -681,10 +667,10 @@ namespace bot7
 
                                     byte[] buf = new byte[targetFormat.AverageBytesPerSecond / 50]; // ~20 ms @ 48k stereo 16-bit (3840 bytes)
                                     int n;
-                                    while ((n = resampler.Read(buf, 0, buf.Length)) > 0) { 
+                                    while ((n = resampler.Read(buf, 0, buf.Length)) > 0)
+                                    {
                                         await discordstream.WriteAsync(buf.AsMemory(0, n), CancellationToken.None);
                                     }
-
                                 }
                                 else
                                 {
@@ -703,7 +689,8 @@ namespace bot7
                             {
                                 await output.CopyToAsync(discordstream, _cancellationTokenSource.Token);
                             }
-                            catch (Exception e) {
+                            catch (Exception e)
+                            {
                                 Console.WriteLine($"Error Copying to the Discord Stream {e.Message}");
                             }
                             finally
@@ -724,6 +711,25 @@ namespace bot7
             catch (Exception e)
             {
                 Console.WriteLine("flushbug: " + e.Message);
+            }
+        }
+
+        private static void EnsureDiscordStream()
+        {
+            if (discordstream == null)
+            {
+                int bitrate = 128_000;//131_072; // XD
+                try
+                {
+                    discordstream = audioClient.CreatePCMStream(AudioApplication.Music, bitrate, 8000, 10);
+                }
+                catch
+                {
+                    Console.WriteLine($"Error creating PCM stream, trying with bitrate {bitrate}");
+                }
+                Console.BackgroundColor = ConsoleColor.Magenta;
+                Console.WriteLine($"bitrate {bitrate}");
+
             }
         }
 
