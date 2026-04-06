@@ -26,7 +26,8 @@ namespace bot7
             {
                 GatewayIntents = GatewayIntents.Guilds |
         GatewayIntents.GuildVoiceStates |
-        GatewayIntents.GuildMessages|GatewayIntents.GuildMessages |GatewayIntents.Guilds | GatewayIntents.GuildVoiceStates | GatewayIntents.GuildMessages |GatewayIntents.MessageContent
+        GatewayIntents.GuildMessages|GatewayIntents.GuildMessages |GatewayIntents.Guilds | GatewayIntents.GuildVoiceStates | GatewayIntents.GuildMessages |GatewayIntents.MessageContent, EnableVoiceDaveEncryption = true
+
             };
 
             client = new DiscordSocketClient(config);
